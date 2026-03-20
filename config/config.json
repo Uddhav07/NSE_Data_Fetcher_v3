@@ -1,0 +1,23 @@
+{
+    "ticker": "^NSEI",
+    "excel_file": "data/NSE50_Data.xlsx",
+    "start_date": "2025-10-01",
+    "schedule_time": "17:30",
+    "log_level": "INFO",
+    "max_retries": 3,
+    "request_timeout": 15,
+    "open_excel_after_run": true,
+    "backup_before_update": true,
+    "description": "Configuration for NSE Data Fetcher v3",
+    "notes": [
+        "ticker: Yahoo Finance symbol (^NSEI = Nifty 50, ^NSEBANK = Bank Nifty)",
+        "excel_file: Relative path for the output Excel file",
+        "start_date: First date to fetch historical data (YYYY-MM-DD)",
+        "schedule_time: Daily auto-run time in 24-hour format (HH:MM)",
+        "log_level: DEBUG | INFO | WARNING | ERROR | CRITICAL",
+        "max_retries: Number of retry attempts for failed HTTP requests",
+        "request_timeout: HTTP request timeout in seconds",
+        "open_excel_after_run: Open Excel file automatically after manual runs",
+        "backup_before_update: Create a backup of Excel before updating"
+    ]
+}

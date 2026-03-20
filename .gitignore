@@ -1,0 +1,28 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Project – generated at runtime
+data/*.xlsx
+data/~$*.xlsx
+archive/
+logs/*.log
+
+# Reference folder (if cloned)
+_v2_reference/
