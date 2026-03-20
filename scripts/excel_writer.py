@@ -2,7 +2,7 @@
 
 import logging
 import shutil
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 _BLUE_FILL = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
 _WHITE_BOLD = Font(bold=True, color="FFFFFF", size=10)
 _YELLOW_FILL = PatternFill(start_color="BF8F00", end_color="BF8F00", fill_type="solid")
-_MONDAY_FILL = PatternFill(patternType="solid", fgColor=Color(theme=9, tint=0.3999755851924192))
+_TUESDAY_FILL = PatternFill(patternType="solid", fgColor=Color(theme=9, tint=0.3999755851924192))
 _GREEN_FONT = Font(color="006100")
 _RED_FONT = Font(color="9C0006")
 _GREEN_FILL = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
@@ -124,10 +124,32 @@ def get_last_date(excel_path: str) -> Optional[datetime]:
         return None
 
 
-def _apply_monday_highlight(ws, row: int) -> None:
-    """Highlight columns A–H for Monday rows."""
-    for col in range(1, 9):
-        ws.cell(row, col).fill = _MONDAY_FILL
+def _apply_all_tuesday_highlights(ws) -> None:
+    """Scan ALL data rows and highlight Tuesdays on columns A-H.
+
+    Also clears any stale day-based highlights on non-Tuesday rows.
+    """
+    no_fill = PatternFill(fill_type=None)
+    for row in range(2, ws.max_row + 1):
+        val = ws.cell(row, 2).value
+        if val is None:
+            continue
+        try:
+            if isinstance(val, str):
+                dt = datetime.strptime(val[:10], "%Y-%m-%d")
+            elif isinstance(val, datetime):
+                dt = val
+            else:
+                continue
+        except (ValueError, TypeError):
+            continue
+
+        if dt.weekday() == 1:  # Tuesday
+            for col in range(1, 9):
+                ws.cell(row, col).fill = _TUESDAY_FILL
+        else:
+            for col in range(1, 9):
+                ws.cell(row, col).fill = no_fill
 
 
 def _apply_change_formatting(ws, row: int, col: int) -> None:
@@ -186,12 +208,15 @@ def update_workbook(
     wb = load_workbook(excel_path)
     ws = wb.active
 
-    # Collect existing dates for duplicate detection
-    existing_dates: set[str] = set()
+    # Build date-to-row map for duplicate detection and weekly change lookup
+    date_row_map: dict[str, int] = {}
     for row in range(2, ws.max_row + 1):
         val = ws.cell(row, 2).value
         if val:
-            existing_dates.add(str(val))
+            if isinstance(val, datetime):
+                date_row_map[val.strftime("%Y-%m-%d")] = row
+            elif isinstance(val, str):
+                date_row_map[str(val)[:10]] = row
 
     last_row = ws.max_row
     added = 0
@@ -201,14 +226,13 @@ def update_workbook(
     for date_idx, row_data in data.iterrows():
         date_str = date_idx.strftime("%Y-%m-%d")
 
-        if date_str in existing_dates:
+        if date_str in date_row_map:
             logger.debug("Skipping duplicate: %s", date_str)
             skipped += 1
             continue
 
         last_row += 1
         added += 1
-        existing_dates.add(date_str)
 
         # A: Day formula
         ws.cell(last_row, 1, f'=TEXT(B{last_row},"dddd")')
@@ -230,11 +254,21 @@ def update_workbook(
         ws.cell(last_row, 7).number_format = "#,##0.00"
         ws.cell(last_row, 7).alignment = _CENTER
 
-        # H: Weekly Change = Close - Close 5 rows ago
-        if last_row >= 7:
-            ws.cell(last_row, 8, f"=F{last_row}-F{last_row - 5}")
+        # H: Weekly Change — find close from ~7 calendar days back (holiday-aware)
+        target_date_str = (date_idx - timedelta(days=7)).strftime("%Y-%m-%d")
+        sorted_dates = sorted(date_row_map.keys())
+        ref_row = None
+        for d in sorted_dates:
+            if d >= target_date_str:
+                ref_row = date_row_map[d]
+                break
+        if ref_row is not None and ref_row != last_row:
+            ws.cell(last_row, 8, f"=F{last_row}-F{ref_row}")
             ws.cell(last_row, 8).number_format = "#,##0.00"
             ws.cell(last_row, 8).alignment = _CENTER
+
+        # Track this row in date_row_map for subsequent weekly-change lookups
+        date_row_map[date_str] = last_row
 
         # I–L: Technical analysis (needs previous row)
         if last_row > 2:
@@ -271,9 +305,8 @@ def update_workbook(
         for col in range(1, 16):
             ws.cell(last_row, col).border = _THIN_BORDER
 
-        # Monday highlighting (columns A–H)
-        if date_idx.weekday() == 0:
-            _apply_monday_highlight(ws, last_row)
+    # Apply Tuesday highlighting to ALL rows (handles existing + new data)
+    _apply_all_tuesday_highlights(ws)
 
     # Apply conditional formatting rules (idempotent — openpyxl deduplicates)
     _add_conditional_formatting(ws)

@@ -24,14 +24,17 @@ class AppConfig:
     """Application configuration with defaults and validation."""
 
     ticker: str = "^NSEI"
-    excel_file: str = "data/NSE50_Data.xlsx"
-    start_date: str = "2025-10-01"
-    schedule_time: str = "17:30"
+    excel_file: str = "data/stock_market_NSE50.xlsx"
+    start_date: str = ""  # Computed dynamically: Jan 1st of current year
     log_level: str = "INFO"
     max_retries: int = 3
     request_timeout: int = 15
     open_excel_after_run: bool = True
     backup_before_update: bool = True
+
+    def __post_init__(self) -> None:
+        if not self.start_date:
+            self.start_date = f"{datetime.now().year}-01-01"
 
     def validate(self) -> list[str]:
         """Return a list of validation errors (empty if valid)."""
@@ -42,12 +45,6 @@ class AppConfig:
             datetime.strptime(self.start_date, "%Y-%m-%d")
         except ValueError:
             errors.append(f"Invalid start_date format: '{self.start_date}'. Use YYYY-MM-DD.")
-
-        # Validate schedule_time
-        try:
-            datetime.strptime(self.schedule_time, "%H:%M")
-        except ValueError:
-            errors.append(f"Invalid schedule_time format: '{self.schedule_time}'. Use HH:MM.")
 
         # Validate ticker is non-empty
         if not self.ticker.strip():
@@ -109,9 +106,8 @@ def save_default_config(config_path: str = "config/config.json") -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     default = {
         "ticker": "^NSEI",
-        "excel_file": "data/NSE50_Data.xlsx",
-        "start_date": "2025-10-01",
-        "schedule_time": "17:30",
+        "excel_file": "data/stock_market_NSE50.xlsx",
+        "start_date": f"{datetime.now().year}-01-01",
         "log_level": "INFO",
         "max_retries": 3,
         "request_timeout": 15,
@@ -121,8 +117,7 @@ def save_default_config(config_path: str = "config/config.json") -> None:
         "notes": [
             "ticker: Yahoo Finance symbol (^NSEI = Nifty 50, ^NSEBANK = Bank Nifty)",
             "excel_file: Relative path for the output Excel file",
-            "start_date: First date to fetch historical data (YYYY-MM-DD)",
-            "schedule_time: Daily auto-run time in 24-hour format (HH:MM)",
+            "start_date: First date to fetch historical data (YYYY-MM-DD). Defaults to Jan 1 of current year.",
             "log_level: DEBUG | INFO | WARNING | ERROR | CRITICAL",
             "max_retries: Number of retry attempts for failed HTTP requests",
             "request_timeout: HTTP request timeout in seconds",

@@ -68,6 +68,6 @@ echo ============================================================
 echo.
 echo   Virtual env : .\venv\
 echo   Python      : venv\Scripts\python.exe
-echo   Next step   : run_manual.bat
+echo   Next step   : Double-click stock_market.bat
 echo.
 pause

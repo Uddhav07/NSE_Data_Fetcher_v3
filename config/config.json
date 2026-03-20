@@ -1,8 +1,7 @@
 {
     "ticker": "^NSEI",
-    "excel_file": "data/NSE50_Data.xlsx",
-    "start_date": "2025-10-01",
-    "schedule_time": "17:30",
+    "excel_file": "data/stock_market_NSE50.xlsx",
+    "start_date": "2026-01-01",
     "log_level": "INFO",
     "max_retries": 3,
     "request_timeout": 15,
@@ -12,8 +11,7 @@
     "notes": [
         "ticker: Yahoo Finance symbol (^NSEI = Nifty 50, ^NSEBANK = Bank Nifty)",
         "excel_file: Relative path for the output Excel file",
-        "start_date: First date to fetch historical data (YYYY-MM-DD)",
-        "schedule_time: Daily auto-run time in 24-hour format (HH:MM)",
+        "start_date: First date to fetch historical data (YYYY-MM-DD). Defaults to Jan 1 of current year.",
         "log_level: DEBUG | INFO | WARNING | ERROR | CRITICAL",
         "max_retries: Number of retry attempts for failed HTTP requests",
         "request_timeout: HTTP request timeout in seconds",

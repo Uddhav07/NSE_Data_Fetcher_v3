@@ -14,12 +14,14 @@ Automated **Nifty 50 Index** data fetcher with technical analysis, futures track
 | **Logging** | `print()` statements | Rotating file + console via `logging` |
 | **Retries** | None | Exponential back-off (configurable) |
 | **Futures bug** | Same price stamped on *every* row | Futures only written for today's row |
-| **Excel formatting** | Basic colors | Conditional green/red for changes, freeze panes |
+| **Excel formatting** | Basic colors | Conditional green/red, Tuesday highlighting, freeze panes |
 | **CLI** | None | `--full-refresh`, `--start`, `--no-futures`, `--version` |
 | **Config validation** | None | Dataclass-based with typed defaults |
 | **Backups** | None | Timestamped archive before each update |
 | **Data validation** | None | NaN/zero row filtering |
-| **Type hints** | None | Throughout |
+| **Weekly Change** | Fixed -5 rows | Holiday-aware date lookup |
+| **Start Date** | Hard-coded | Defaults to Jan 1 of current year |
+| **Execution** | Scheduled task | One-click `stock_market.bat` |
 
 ---
 
@@ -28,9 +30,12 @@ Automated **Nifty 50 Index** data fetcher with technical analysis, futures track
 - **OHLC Data** from Yahoo Finance (`^NSEI`)
 - **Futures Price & Expiry** from Groww.in (current month)
 - **Technical Analysis** formulas — HH/HL, LL/LH, daily & weekly changes
+- **Tuesday Highlighting** — all Tuesday rows highlighted in Excel
+- **Holiday-Aware Weekly Change** — compares with correct trading day ~7 calendar days back
 - **Duplicate Prevention** — existing dates are never overwritten
-- **Professional Excel** — color-coded headers, Monday highlighting, conditional red/green, frozen header row
-- **Daily Automation** via Windows Task Scheduler
+- **Professional Excel** — color-coded headers, conditional red/green, frozen header row
+- **Environment Health Checks** — validates Python, packages, and network on startup
+- **Auto-Open Excel** — opens the file automatically after each update
 - **Rotating Logs** — 5 MB × 3 backups in `logs/`
 
 ---
@@ -42,7 +47,7 @@ NSE_Data_Fetcher_v3/
 ├── scripts/
 │   ├── __init__.py          # Package marker + version
 │   ├── __main__.py          # python -m scripts entry
-│   ├── main.py              # CLI, orchestration, logging setup
+│   ├── main.py              # CLI, orchestration, logging, health checks
 │   ├── config_manager.py    # Config loading and validation
 │   ├── fetcher.py           # Yahoo Finance OHLC fetcher
 │   ├── futures.py           # Groww futures scraper
@@ -53,9 +58,7 @@ NSE_Data_Fetcher_v3/
 ├── logs/                    # Rotating log files (auto-created)
 ├── archive/                 # Timestamped backups (auto-created)
 ├── setup.bat                # One-time venv + deps setup
-├── run_manual.bat           # Manual fetch (double-click)
-├── run_scheduled.bat        # Silent scheduled run
-├── schedule_task.bat        # Register Windows daily task
+├── stock_market.bat         # ★ Main entry — double-click to update
 ├── requirements.txt
 ├── .gitignore
 └── README.md
@@ -68,7 +71,7 @@ NSE_Data_Fetcher_v3/
 ### 1. Clone & Setup
 
 ```bat
-git clone https://github.com/pmmittal-byte/NSE_Data_Fetcher_v3.git
+git clone https://github.com/Uddhav07/NSE_Data_Fetcher_v3.git
 cd NSE_Data_Fetcher_v3
 setup.bat
 ```
@@ -77,15 +80,13 @@ This creates a Python **virtual environment** (`venv/`) and installs all depende
 
 ### 2. Fetch Data
 
-Double-click **`run_manual.bat`**, or from a terminal:
+Double-click **`stock_market.bat`**, or from a terminal:
 
 ```bat
 venv\Scripts\python.exe -m scripts.main
 ```
 
-### 3. Automate (optional)
-
-Double-click **`schedule_task.bat`** to register a daily 5:30 PM task.
+The batch file will auto-run setup if the venv is missing.
 
 ---
 
@@ -117,9 +118,10 @@ usage: main.py [-h] [--config PATH] [--start YYYY-MM-DD]
 
 ### Formatting
 
-- **Monday rows**: light-blue highlight on columns A–H
+- **Tuesday rows**: light highlight on columns A–H
 - **Daily / Weekly Change**: conditional green (positive) / red (negative)
 - **Futures Difference**: conditional green / red
+- **Weekly Change**: holiday-aware — finds the closest trading day to 7 calendar days back
 - **Freeze Panes**: header row always visible
 
 ---
@@ -131,9 +133,8 @@ Edit `config/config.json`:
 ```json
 {
     "ticker": "^NSEI",
-    "excel_file": "data/NSE50_Data.xlsx",
-    "start_date": "2025-10-01",
-    "schedule_time": "17:30",
+    "excel_file": "data/stock_market_NSE50.xlsx",
+    "start_date": "2026-01-01",
     "log_level": "INFO",
     "max_retries": 3,
     "request_timeout": 15,
@@ -145,11 +146,12 @@ Edit `config/config.json`:
 | Key | Description |
 |-----|-------------|
 | `ticker` | Yahoo Finance symbol (`^NSEI`, `^NSEBANK`, `^BSESN`) |
-| `start_date` | Earliest date to fetch (YYYY-MM-DD) |
-| `schedule_time` | Daily auto-run time (24 h) |
+| `excel_file` | Output Excel path (relative to project root) |
+| `start_date` | Earliest date to fetch (YYYY-MM-DD). Defaults to Jan 1 of current year. |
 | `log_level` | DEBUG / INFO / WARNING / ERROR / CRITICAL |
 | `max_retries` | HTTP retry attempts before giving up |
 | `request_timeout` | HTTP timeout in seconds |
+| `open_excel_after_run` | Auto-open Excel after update |
 | `backup_before_update` | Archive Excel before each write |
 
 ---

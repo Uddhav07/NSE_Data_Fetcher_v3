@@ -3,7 +3,7 @@
 Usage:
     python -m scripts.main                  # normal incremental update
     python -m scripts.main --full-refresh   # re-fetch from start_date
-    python -m scripts.main --start 2025-06-01
+    python -m scripts.main --start 2026-06-01
     python -m scripts.main --no-futures     # skip futures scraping
 """
 
@@ -27,6 +27,36 @@ from .excel_writer import (
 )
 
 logger = logging.getLogger("nse_fetcher")
+
+
+# ── Health checks ─────────────────────────────────────────────────────────────
+
+def _check_environment() -> list[str]:
+    """Validate runtime environment. Returns list of issues (empty = OK)."""
+    issues: list[str] = []
+
+    # Python version
+    if sys.version_info < (3, 10):
+        issues.append(
+            f"Python 3.10+ required (found {sys.version_info.major}.{sys.version_info.minor})"
+        )
+
+    # Required packages
+    required = ["yfinance", "pandas", "openpyxl", "requests"]
+    for pkg in required:
+        try:
+            __import__(pkg)
+        except ImportError:
+            issues.append(f"Missing package: {pkg}. Run: pip install -r requirements.txt")
+
+    # Network check (lightweight)
+    try:
+        import requests as _req
+        _req.head("https://www.google.com", timeout=5)
+    except Exception:
+        issues.append("No internet connection detected. Data fetch will fail.")
+
+    return issues
 
 
 # ── Logging setup ─────────────────────────────────────────────────────────────
@@ -107,6 +137,14 @@ def run() -> None:
     logger.info("NSE Data Fetcher v%s — %s", __version__, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     logger.info("=" * 60)
 
+    # Environment health check
+    issues = _check_environment()
+    for issue in issues:
+        logger.warning("ENV CHECK: %s", issue)
+    if any("Missing package" in i for i in issues):
+        logger.error("Critical packages missing. Run setup.bat first.")
+        sys.exit(1)
+
     excel_path = config.excel_file
 
     # Determine start date
@@ -137,6 +175,9 @@ def run() -> None:
     if data is None or data.empty:
         logger.info("No new data available. You're up to date!")
         logger.info("=" * 60)
+        # Still open Excel if it exists so user can review
+        if config.open_excel_after_run and os.path.exists(excel_path):
+            _open_excel(excel_path)
         return
 
     # Fetch futures (only if not disabled)
@@ -154,6 +195,19 @@ def run() -> None:
     logger.info("=" * 60)
     logger.info("Update complete!  Added: %d  |  Skipped: %d", added, skipped)
     logger.info("=" * 60)
+
+    # Auto-open Excel
+    if config.open_excel_after_run and os.path.exists(excel_path):
+        _open_excel(excel_path)
+
+
+def _open_excel(path: str) -> None:
+    """Open the Excel file in the default application."""
+    try:
+        os.startfile(os.path.abspath(path))
+        logger.info("Opened %s", path)
+    except Exception as exc:
+        logger.warning("Could not open Excel file: %s", exc)
 
 
 def main() -> None:
