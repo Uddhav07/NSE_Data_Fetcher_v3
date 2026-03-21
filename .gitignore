@@ -24,5 +24,8 @@ data/~$*.xlsx
 archive/
 logs/*.log
 
+# Installer output
+installer/Output/
+
 # Reference folder (if cloned)
 _v2_reference/

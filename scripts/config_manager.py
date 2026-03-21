@@ -9,6 +9,8 @@ from typing import Optional
 
 import logging
 
+from .paths import get_config_path, get_base_dir
+
 logger = logging.getLogger(__name__)
 
 # Supported tickers for quick reference
@@ -64,8 +66,10 @@ class AppConfig:
         return errors
 
 
-def load_config(config_path: str = "config/config.json") -> AppConfig:
+def load_config(config_path: str | None = None) -> AppConfig:
     """Load configuration from JSON file, falling back to defaults."""
+    if config_path is None:
+        config_path = str(get_config_path())
     config = AppConfig()
 
     if not os.path.exists(config_path):
@@ -97,8 +101,10 @@ def load_config(config_path: str = "config/config.json") -> AppConfig:
     return config
 
 
-def save_default_config(config_path: str = "config/config.json") -> None:
+def save_default_config(config_path: str | None = None) -> None:
     """Write a default config file if none exists."""
+    if config_path is None:
+        config_path = str(get_config_path())
     path = Path(config_path)
     if path.exists():
         return

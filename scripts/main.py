@@ -1,10 +1,13 @@
 """Main entry point for NSE Data Fetcher v3.
 
-Usage:
+Usage (CLI):
     python -m scripts.main                  # normal incremental update
     python -m scripts.main --full-refresh   # re-fetch from start_date
     python -m scripts.main --start 2026-06-01
     python -m scripts.main --no-futures     # skip futures scraping
+
+Usage (GUI):
+    python app.py                           # launch desktop GUI
 """
 
 import argparse
@@ -14,8 +17,10 @@ import sys
 from datetime import datetime, timedelta
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from typing import Optional, Callable
 
 from . import __version__
+from .paths import get_logs_dir, resolve_relative, ensure_dirs, get_base_dir
 from .config_manager import AppConfig, load_config, save_default_config
 from .fetcher import fetch_ohlc_data
 from .futures import fetch_futures
@@ -61,9 +66,15 @@ def _check_environment() -> list[str]:
 
 # ── Logging setup ─────────────────────────────────────────────────────────────
 
-def _setup_logging(config: AppConfig) -> None:
-    """Configure root logger with console + rotating file handlers."""
-    log_dir = Path("logs")
+def setup_logging(config: AppConfig, extra_handler: Optional[logging.Handler] = None) -> None:
+    """Configure root logger with console + rotating file handlers.
+
+    Parameters
+    ----------
+    config : AppConfig
+    extra_handler : optional additional handler (e.g. GUI text widget handler)
+    """
+    log_dir = get_logs_dir()
     log_dir.mkdir(exist_ok=True)
 
     level = getattr(logging, config.log_level.upper(), logging.INFO)
@@ -94,6 +105,10 @@ def _setup_logging(config: AppConfig) -> None:
     if not root.handlers:
         root.addHandler(console)
         root.addHandler(file_handler)
+        if extra_handler:
+            extra_handler.setFormatter(fmt)
+            extra_handler.setLevel(level)
+            root.addHandler(extra_handler)
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
@@ -103,8 +118,8 @@ def _parse_args() -> argparse.Namespace:
         description=f"NSE Data Fetcher v{__version__} — Nifty 50 OHLC + Futures tracker",
     )
     parser.add_argument(
-        "--config", default="config/config.json",
-        help="Path to config JSON file (default: config/config.json)",
+        "--config",
+        help="Path to config JSON file (default: auto-detect)",
     )
     parser.add_argument(
         "--start", metavar="YYYY-MM-DD",
@@ -124,19 +139,47 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-# ── Main logic ────────────────────────────────────────────────────────────────
+# ── Core fetch logic (called by both CLI and GUI) ────────────────────────────
 
-def run() -> None:
-    args = _parse_args()
+class FetchResult:
+    """Outcome of a fetch operation."""
+    __slots__ = ("added", "skipped", "error", "excel_path")
 
-    # Ensure default config exists
-    save_default_config(args.config)
+    def __init__(self, added: int = 0, skipped: int = 0,
+                 error: str = "", excel_path: str = ""):
+        self.added = added
+        self.skipped = skipped
+        self.error = error
+        self.excel_path = excel_path
 
-    config = load_config(args.config)
-    _setup_logging(config)
+    @property
+    def ok(self) -> bool:
+        return not self.error
+
+
+def run_fetch(
+    *,
+    config_path: Optional[str] = None,
+    start_override: Optional[str] = None,
+    full_refresh: bool = False,
+    no_futures: bool = False,
+    open_excel: Optional[bool] = None,
+) -> FetchResult:
+    """Execute the data-fetch pipeline. Returns a FetchResult.
+
+    This is the main workhorse used by **both** the CLI ``run()`` and the GUI.
+    It never calls ``sys.exit()`` — errors are reported via ``FetchResult.error``.
+    """
+    # Ensure writable directories exist
+    ensure_dirs()
+
+    # Config
+    save_default_config(config_path)
+    config = load_config(config_path)
 
     logger.info("=" * 60)
-    logger.info("NSE Data Fetcher v%s — %s", __version__, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    logger.info("NSE Data Fetcher v%s — %s", __version__,
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     logger.info("=" * 60)
 
     # Environment health check
@@ -144,41 +187,39 @@ def run() -> None:
     for issue in issues:
         logger.warning("ENV CHECK: %s", issue)
     if any("Missing package" in i for i in issues):
-        logger.error("Critical packages missing. Run setup.bat first.")
-        sys.exit(1)
+        return FetchResult(error="Critical packages missing.")
 
-    excel_path = config.excel_file
+    excel_path = str(resolve_relative(config.excel_file))
 
     # Determine start date
-    if args.full_refresh or not os.path.exists(excel_path):
-        if args.full_refresh and os.path.exists(excel_path):
+    if full_refresh or not os.path.exists(excel_path):
+        if full_refresh and os.path.exists(excel_path):
             logger.info("Full refresh requested — recreating workbook.")
             backup_workbook(excel_path)
             try:
                 os.remove(excel_path)
             except PermissionError:
-                logger.error(
-                    "Cannot delete '%s' — the file is locked. "
-                    "Please close it in Excel and try again.",
-                    excel_path,
+                return FetchResult(
+                    error=f"Cannot delete '{excel_path}' — the file is locked. "
+                          "Please close it in Excel and try again.",
+                    excel_path=excel_path,
                 )
-                sys.exit(1)
 
         if not os.path.exists(excel_path):
             logger.info("Excel file not found — creating new workbook.")
             create_workbook(excel_path)
 
-        start = args.start or config.start_date
+        start = start_override or config.start_date
         logger.info("Fetching historical data from %s...", start)
     else:
-        # Incremental: pick up from day after last entry
         last = get_last_date(excel_path)
         if last is None:
-            start = args.start or config.start_date
+            start = start_override or config.start_date
             logger.info("Excel is empty. Fetching from %s...", start)
         else:
             start = (last + timedelta(days=1)).strftime("%Y-%m-%d")
-            logger.info("Last date in Excel: %s — fetching from %s...", last.strftime("%Y-%m-%d"), start)
+            logger.info("Last date in Excel: %s — fetching from %s...",
+                        last.strftime("%Y-%m-%d"), start)
 
     # Backup before update
     if config.backup_before_update and os.path.exists(excel_path):
@@ -190,14 +231,14 @@ def run() -> None:
     if data is None or data.empty:
         logger.info("No new data available. You're up to date!")
         logger.info("=" * 60)
-        # Still open Excel if it exists so user can review
-        if config.open_excel_after_run and os.path.exists(excel_path):
+        should_open = open_excel if open_excel is not None else config.open_excel_after_run
+        if should_open and os.path.exists(excel_path):
             _open_excel(excel_path)
-        return
+        return FetchResult(excel_path=excel_path)
 
-    # Fetch futures (only if not disabled)
+    # Fetch futures
     futures_price, futures_expiry = None, None
-    if not args.no_futures:
+    if not no_futures:
         futures_price, futures_expiry = fetch_futures(config)
 
     # Write to Excel
@@ -211,9 +252,34 @@ def run() -> None:
     logger.info("Update complete!  Added: %d  |  Skipped: %d", added, skipped)
     logger.info("=" * 60)
 
-    # Auto-open Excel
-    if config.open_excel_after_run and os.path.exists(excel_path):
+    should_open = open_excel if open_excel is not None else config.open_excel_after_run
+    if should_open and os.path.exists(excel_path):
         _open_excel(excel_path)
+
+    return FetchResult(added=added, skipped=skipped, excel_path=excel_path)
+
+
+# ── CLI entry ─────────────────────────────────────────────────────────────────
+
+def run() -> None:
+    """CLI entry point — parses args and delegates to run_fetch."""
+    args = _parse_args()
+
+    ensure_dirs()
+    save_default_config(args.config)
+    config = load_config(args.config)
+    setup_logging(config)
+
+    result = run_fetch(
+        config_path=args.config,
+        start_override=args.start,
+        full_refresh=args.full_refresh,
+        no_futures=args.no_futures,
+    )
+
+    if not result.ok:
+        logger.error(result.error)
+        sys.exit(1)
 
 
 def _open_excel(path: str) -> None:

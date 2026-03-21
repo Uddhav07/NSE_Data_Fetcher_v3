@@ -11,6 +11,8 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Color, Font, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
 
+from .paths import get_archive_dir, resolve_relative
+
 logger = logging.getLogger(__name__)
 
 # ── Styles ────────────────────────────────────────────────────────────────────
@@ -94,7 +96,7 @@ def backup_workbook(excel_path: str) -> Optional[str]:
     if not src.exists():
         return None
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    dest = Path("archive") / f"{src.stem}_{ts}{src.suffix}"
+    dest = get_archive_dir() / f"{src.stem}_{ts}{src.suffix}"
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(str(src), str(dest))
     logger.info("Backup saved: %s", dest)

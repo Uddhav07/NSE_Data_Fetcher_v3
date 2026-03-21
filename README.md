@@ -1,8 +1,23 @@
 # NSE Data Fetcher v3
 
-Automated **Nifty 50 Index** data fetcher with technical analysis, futures tracking, and professional Excel output.
+Automated **Nifty 50 Index** data fetcher with technical analysis, futures tracking, and professional Excel output. Available as a **standalone Windows desktop application** — no Python installation needed.
 
 > Rewritten from [v2.1](https://github.com/pmmittal-byte/NSE_Data_Fetcher_v2.1) with a modular architecture, proper logging, retry logic, and an improved Excel layout.
+
+---
+
+## Download & Install
+
+### Option A: Windows Installer (recommended)
+
+1. Download **`NSE_Data_Fetcher_Setup.exe`** from [Releases](https://github.com/Uddhav07/NSE_Data_Fetcher_v3/releases).
+2. Run the installer — no admin privileges required.
+3. Launch **NSE Data Fetcher** from the Start Menu or Desktop shortcut.
+
+### Option B: Standalone .exe (portable)
+
+1. Download the **`NSE_Data_Fetcher_Portable.zip`** from [Releases](https://github.com/Uddhav07/NSE_Data_Fetcher_v3/releases).
+2. Extract anywhere and double-click **`NSE Data Fetcher.exe`**.
 
 ---
 
@@ -11,6 +26,8 @@ Automated **Nifty 50 Index** data fetcher with technical analysis, futures track
 | Area | v2.1 | v3 |
 |---|---|---|
 | **Architecture** | Single 290-line file | 5 focused modules |
+| **GUI** | None | Desktop app with tkinter |
+| **Distribution** | Requires Python | Standalone .exe + Windows installer |
 | **Logging** | `print()` statements | Rotating file + console via `logging` |
 | **Retries** | None | Exponential back-off (configurable) |
 | **Futures bug** | Same price stamped on *every* row | Futures only written for today's row |
@@ -27,6 +44,7 @@ Automated **Nifty 50 Index** data fetcher with technical analysis, futures track
 
 ## Features
 
+- **Desktop GUI** — Update Data, Open Excel, Settings, progress bar, live log output
 - **OHLC Data** from Yahoo Finance (`^NSEI`)
 - **Futures Price & Expiry** from Groww.in (current month)
 - **Technical Analysis** formulas — HH/HL, LL/LH, daily & weekly changes
@@ -48,18 +66,28 @@ NSE_Data_Fetcher_v3/
 │   ├── __init__.py          # Package marker + version
 │   ├── __main__.py          # python -m scripts entry
 │   ├── main.py              # CLI, orchestration, logging, health checks
+│   ├── gui.py               # Desktop GUI (tkinter + ttk)
+│   ├── paths.py             # Path resolution (dev vs frozen exe)
 │   ├── config_manager.py    # Config loading and validation
 │   ├── fetcher.py           # Yahoo Finance OHLC fetcher
 │   ├── futures.py           # Groww futures scraper
 │   └── excel_writer.py      # Workbook creation & update
 ├── config/
 │   └── config.json          # User settings
+├── assets/
+│   └── icon.ico             # Application icon
+├── installer/
+│   └── installer.iss        # Inno Setup script
 ├── data/                    # Excel output (auto-created)
 ├── logs/                    # Rotating log files (auto-created)
 ├── archive/                 # Timestamped backups (auto-created)
-├── setup.bat                # One-time venv + deps setup
-├── stock_market.bat         # ★ Main entry — double-click to update
-├── requirements.txt
+├── app.py                   # GUI entry point (PyInstaller target)
+├── nse_fetcher.spec         # PyInstaller build spec
+├── build.bat                # One-click build: exe + installer
+├── setup.bat                # Dev setup: venv + deps
+├── stock_market.bat         # CLI entry: double-click to update
+├── requirements.txt         # Runtime dependencies
+├── requirements-dev.txt     # Build dependencies (pyinstaller)
 ├── .gitignore
 └── README.md
 ```
@@ -158,6 +186,10 @@ Edit `config/config.json`:
 
 ## Requirements
 
+For the **installed/portable .exe**: just Windows 10/11 and an internet connection. No Python needed.
+
+For **developers** building from source:
+
 - **Windows 10/11**
 - **Python 3.10+** — [python.org](https://www.python.org/downloads/)
 - **Internet** connection
@@ -194,6 +226,35 @@ Check `logs/nse_fetcher.log` for detailed diagnostics.
 
 Provided as-is for personal and educational use.
 
+---
+
+## Building from Source
+
+### Prerequisites
+- Python 3.10+ with `pip`
+- (Optional) [Inno Setup 6](https://jrsoftware.org/isinfo.php) for building the installer
+
+### Steps
+
+```bat
+git clone https://github.com/Uddhav07/NSE_Data_Fetcher_v3.git
+cd NSE_Data_Fetcher_v3
+setup.bat                   # Creates venv, installs runtime deps
+build.bat                   # Installs PyInstaller, builds exe + installer
+```
+
+**Output:**
+- `dist\NSE Data Fetcher\NSE Data Fetcher.exe` — standalone exe (folder mode)
+- `dist\installer\NSE_Data_Fetcher_Setup.exe` — Windows installer (if Inno Setup is available)
+
+### Running in dev mode (no build)
+
+```bat
+setup.bat
+venv\Scripts\python.exe app.py          # GUI mode
+venv\Scripts\python.exe -m scripts.main  # CLI mode
+```
+
 ## Version
 
-**3.0.0** — March 2026
+**3.1.0** — March 2026
