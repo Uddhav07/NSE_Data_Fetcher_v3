@@ -71,3 +71,4 @@ echo   Python      : venv\Scripts\python.exe
 echo   Next step   : Double-click stock_market.bat
 echo.
 pause
+exit /b 0

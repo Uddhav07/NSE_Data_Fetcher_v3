@@ -2,16 +2,14 @@
 
 import logging
 import shutil
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
 import pandas as pd
 from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Alignment, Color, Font, PatternFill, Border, Side, numbers
+from openpyxl.styles import Alignment, Color, Font, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
-
-from .config_manager import AppConfig
 
 logger = logging.getLogger(__name__)
 
@@ -135,10 +133,10 @@ def _apply_all_tuesday_highlights(ws) -> None:
         if val is None:
             continue
         try:
-            if isinstance(val, str):
-                dt = datetime.strptime(val[:10], "%Y-%m-%d")
-            elif isinstance(val, datetime):
+            if isinstance(val, datetime):
                 dt = val
+            elif isinstance(val, str):
+                dt = datetime.strptime(val[:10], "%Y-%m-%d")
             else:
                 continue
         except (ValueError, TypeError):
@@ -152,41 +150,38 @@ def _apply_all_tuesday_highlights(ws) -> None:
                 ws.cell(row, col).fill = no_fill
 
 
-def _apply_change_formatting(ws, row: int, col: int) -> None:
-    """Add conditional green/red formatting for change cells (Daily/Weekly Change)."""
-    # We use Excel conditional formatting via formulas at the sheet level instead
-    pass  # Handled by _add_conditional_formatting
-
-
 def _add_conditional_formatting(ws) -> None:
     """Add sheet-level conditional formatting rules for change columns."""
     from openpyxl.formatting.rule import CellIsRule
 
+    # Clear existing rules to prevent accumulation across repeated runs
+    ws.conditional_formatting._cf_rules.clear()
+
     # Daily Change (G) — green if > 0, red if < 0
     ws.conditional_formatting.add(
-        f"G2:G1048576",
+        "G2:G1048576",
         CellIsRule(operator="greaterThan", formula=["0"], fill=_GREEN_FILL, font=_GREEN_FONT),
     )
     ws.conditional_formatting.add(
-        f"G2:G1048576",
+        "G2:G1048576",
         CellIsRule(operator="lessThan", formula=["0"], fill=_RED_FILL, font=_RED_FONT),
     )
     # Weekly Change (H)
     ws.conditional_formatting.add(
-        f"H2:H1048576",
+        "H2:H1048576",
         CellIsRule(operator="greaterThan", formula=["0"], fill=_GREEN_FILL, font=_GREEN_FONT),
     )
     ws.conditional_formatting.add(
-        f"H2:H1048576",
+        "H2:H1048576",
         CellIsRule(operator="lessThan", formula=["0"], fill=_RED_FILL, font=_RED_FONT),
     )
     # Difference in future (M)
     ws.conditional_formatting.add(
-        f"M2:M1048576",
+        "M2:M1048576",
         CellIsRule(operator="greaterThan", formula=["0"], fill=_GREEN_FILL, font=_GREEN_FONT),
     )
     ws.conditional_formatting.add(
-        f"M2:M1048576",
+        "M2:M1048576",
         CellIsRule(operator="lessThan", formula=["0"], fill=_RED_FILL, font=_RED_FONT),
     )
 
@@ -234,12 +229,12 @@ def update_workbook(
         last_row += 1
         added += 1
 
-        # A: Day formula
+        # A: Day formula (works because B stores a real datetime)
         ws.cell(last_row, 1, f'=TEXT(B{last_row},"dddd")')
         ws.cell(last_row, 1).alignment = _CENTER
 
-        # B: Date
-        ws.cell(last_row, 2, date_str)
+        # B: Date — store as actual datetime so TEXT() and number_format work
+        ws.cell(last_row, 2, date_idx.to_pydatetime().replace(tzinfo=None))
         ws.cell(last_row, 2).number_format = "YYYY-MM-DD"
         ws.cell(last_row, 2).alignment = _CENTER
 
@@ -249,20 +244,17 @@ def update_workbook(
             cell.number_format = "#,##0.00"
             cell.alignment = _CENTER
 
-        # G: Daily Change = Close - prev Close
-        ws.cell(last_row, 7, f"=F{last_row}-F{last_row - 1}")
-        ws.cell(last_row, 7).number_format = "#,##0.00"
-        ws.cell(last_row, 7).alignment = _CENTER
+        # G: Daily Change = Close - prev Close (skip first data row to avoid #VALUE!)
+        if last_row > 2:
+            ws.cell(last_row, 7, f"=F{last_row}-F{last_row - 1}")
+            ws.cell(last_row, 7).number_format = "#,##0.00"
+            ws.cell(last_row, 7).alignment = _CENTER
 
-        # H: Weekly Change — find close from ~7 calendar days back (holiday-aware)
-        target_date_str = (date_idx - timedelta(days=7)).strftime("%Y-%m-%d")
-        sorted_dates = sorted(date_row_map.keys())
-        ref_row = None
-        for d in sorted_dates:
-            if d >= target_date_str:
-                ref_row = date_row_map[d]
-                break
-        if ref_row is not None and ref_row != last_row:
+        # H: Weekly Change — exactly 5 trading days back (holiday-aware)
+        prior_dates = sorted(d for d in date_row_map if d < date_str)
+        if len(prior_dates) >= 5:
+            ref_date = prior_dates[-5]
+            ref_row = date_row_map[ref_date]
             ws.cell(last_row, 8, f"=F{last_row}-F{ref_row}")
             ws.cell(last_row, 8).number_format = "#,##0.00"
             ws.cell(last_row, 8).alignment = _CENTER
@@ -308,7 +300,7 @@ def update_workbook(
     # Apply Tuesday highlighting to ALL rows (handles existing + new data)
     _apply_all_tuesday_highlights(ws)
 
-    # Apply conditional formatting rules (idempotent — openpyxl deduplicates)
+    # Apply conditional formatting rules (clears old rules first)
     _add_conditional_formatting(ws)
 
     # Ensure freeze panes
