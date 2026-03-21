@@ -123,10 +123,11 @@ def get_last_date(excel_path: str) -> Optional[datetime]:
 
 
 def _apply_all_tuesday_highlights(ws) -> None:
-    """Scan ALL data rows and highlight Tuesdays on columns A-H.
+    """Scan ALL data rows and highlight entire Tuesday rows (all columns A-O).
 
     Also clears any stale day-based highlights on non-Tuesday rows.
     """
+    num_cols = len(COLUMNS)  # 15 (A through O)
     no_fill = PatternFill(fill_type=None)
     for row in range(2, ws.max_row + 1):
         val = ws.cell(row, 2).value
@@ -143,46 +144,50 @@ def _apply_all_tuesday_highlights(ws) -> None:
             continue
 
         if dt.weekday() == 1:  # Tuesday
-            for col in range(1, 9):
+            for col in range(1, num_cols + 1):
                 ws.cell(row, col).fill = _TUESDAY_FILL
         else:
-            for col in range(1, 9):
+            for col in range(1, num_cols + 1):
                 ws.cell(row, col).fill = no_fill
 
 
 def _add_conditional_formatting(ws) -> None:
-    """Add sheet-level conditional formatting rules for change columns."""
-    from openpyxl.formatting.rule import CellIsRule
+    """Add sheet-level conditional formatting rules for change columns.
+
+    Rules skip Tuesday rows (WEEKDAY($B2,2)=2) so the Tuesday highlight
+    fill is never overridden by the green/red formatting.
+    """
+    from openpyxl.formatting.rule import FormulaRule
 
     # Clear existing rules to prevent accumulation across repeated runs
     ws.conditional_formatting._cf_rules.clear()
 
-    # Daily Change (G) — green if > 0, red if < 0
+    # Daily Change (G) — green if > 0, red if < 0 (skip Tuesdays)
     ws.conditional_formatting.add(
         "G2:G1048576",
-        CellIsRule(operator="greaterThan", formula=["0"], fill=_GREEN_FILL, font=_GREEN_FONT),
+        FormulaRule(formula=['AND(G2>0,WEEKDAY($B2,2)<>2)'], fill=_GREEN_FILL, font=_GREEN_FONT),
     )
     ws.conditional_formatting.add(
         "G2:G1048576",
-        CellIsRule(operator="lessThan", formula=["0"], fill=_RED_FILL, font=_RED_FONT),
+        FormulaRule(formula=['AND(G2<0,WEEKDAY($B2,2)<>2)'], fill=_RED_FILL, font=_RED_FONT),
     )
     # Weekly Change (H)
     ws.conditional_formatting.add(
         "H2:H1048576",
-        CellIsRule(operator="greaterThan", formula=["0"], fill=_GREEN_FILL, font=_GREEN_FONT),
+        FormulaRule(formula=['AND(H2>0,WEEKDAY($B2,2)<>2)'], fill=_GREEN_FILL, font=_GREEN_FONT),
     )
     ws.conditional_formatting.add(
         "H2:H1048576",
-        CellIsRule(operator="lessThan", formula=["0"], fill=_RED_FILL, font=_RED_FONT),
+        FormulaRule(formula=['AND(H2<0,WEEKDAY($B2,2)<>2)'], fill=_RED_FILL, font=_RED_FONT),
     )
     # Difference in future (M)
     ws.conditional_formatting.add(
         "M2:M1048576",
-        CellIsRule(operator="greaterThan", formula=["0"], fill=_GREEN_FILL, font=_GREEN_FONT),
+        FormulaRule(formula=['AND(M2>0,WEEKDAY($B2,2)<>2)'], fill=_GREEN_FILL, font=_GREEN_FONT),
     )
     ws.conditional_formatting.add(
         "M2:M1048576",
-        CellIsRule(operator="lessThan", formula=["0"], fill=_RED_FILL, font=_RED_FONT),
+        FormulaRule(formula=['AND(M2<0,WEEKDAY($B2,2)<>2)'], fill=_RED_FILL, font=_RED_FONT),
     )
 
 
