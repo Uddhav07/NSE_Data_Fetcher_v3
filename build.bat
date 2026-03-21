@@ -73,17 +73,21 @@ echo [4/4] Building installer...
 
 set "ISCC="
 REM Try common install locations
-for %%p in (
-    "C:\Program Files (x86)\Inno Setup 6\iscc.exe"
-    "C:\Program Files\Inno Setup 6\iscc.exe"
-) do (
-    if exist %%p set "ISCC=%%~p"
+if exist "C:\Program Files (x86)\Inno Setup 6\iscc.exe" (
+    set "ISCC=C:\Program Files (x86)\Inno Setup 6\iscc.exe"
+)
+if "%ISCC%"=="" if exist "C:\Program Files\Inno Setup 6\iscc.exe" (
+    set "ISCC=C:\Program Files\Inno Setup 6\iscc.exe"
+)
+REM Per-user install location
+if "%ISCC%"=="" if exist "%LOCALAPPDATA%\Programs\Inno Setup 6\iscc.exe" (
+    set "ISCC=%LOCALAPPDATA%\Programs\Inno Setup 6\iscc.exe"
 )
 
-REM Try PATH
+REM Try PATH (use delayed expansion to read errorlevel correctly)
 if "%ISCC%"=="" (
     where iscc.exe >nul 2>&1
-    if %errorlevel% equ 0 set "ISCC=iscc.exe"
+    if !errorlevel! equ 0 set "ISCC=iscc.exe"
 )
 
 if "%ISCC%"=="" (
@@ -91,7 +95,7 @@ if "%ISCC%"=="" (
     echo        to build the installer. The standalone exe is still available in dist\.
 ) else (
     "%ISCC%" installer\installer.iss
-    if %errorlevel% neq 0 (
+    if !errorlevel! neq 0 (
         echo [ERROR] Inno Setup compilation failed.
         pause
         exit /b 1
