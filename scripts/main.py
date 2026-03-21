@@ -90,8 +90,10 @@ def _setup_logging(config: AppConfig) -> None:
 
     root = logging.getLogger()
     root.setLevel(logging.DEBUG)
-    root.addHandler(console)
-    root.addHandler(file_handler)
+    # Prevent duplicate handlers on repeated calls
+    if not root.handlers:
+        root.addHandler(console)
+        root.addHandler(file_handler)
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
@@ -149,6 +151,19 @@ def run() -> None:
 
     # Determine start date
     if args.full_refresh or not os.path.exists(excel_path):
+        if args.full_refresh and os.path.exists(excel_path):
+            logger.info("Full refresh requested — recreating workbook.")
+            backup_workbook(excel_path)
+            try:
+                os.remove(excel_path)
+            except PermissionError:
+                logger.error(
+                    "Cannot delete '%s' — the file is locked. "
+                    "Please close it in Excel and try again.",
+                    excel_path,
+                )
+                sys.exit(1)
+
         if not os.path.exists(excel_path):
             logger.info("Excel file not found — creating new workbook.")
             create_workbook(excel_path)

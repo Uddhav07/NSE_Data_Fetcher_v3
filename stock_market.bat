@@ -10,6 +10,10 @@ cd /d "%~dp0"
 
 REM ── Environment checks ──────────────────────────────────────
 if not exist "venv\Scripts\python.exe" (
+    if exist "venv\" (
+        echo [!] Found broken virtual environment. Cleaning up...
+        rmdir /s /q venv
+    )
     echo [!] Virtual environment not found.
     echo [!] Running first-time setup...
     echo.

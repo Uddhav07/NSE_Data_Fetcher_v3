@@ -1,4 +1,5 @@
 @echo off
+setlocal enabledelayedexpansion
 REM NSE Data Fetcher v3 - Setup Script (creates Python venv and installs deps)
 
 echo ============================================================
@@ -8,17 +9,27 @@ echo.
 
 cd /d "%~dp0"
 
-REM ── Check Python ────────────────────────────────────────────
-python --version >nul 2>&1
-if %errorlevel% neq 0 (
-    echo ERROR: Python is not installed or not in PATH.
-    echo Download from https://www.python.org/downloads/
-    echo Make sure to check "Add Python to PATH" during install.
-    pause
-    exit /b 1
+REM ── Find Python (try py launcher first, then python) ────────
+set "PYTHON_CMD="
+py -3 --version >nul 2>&1
+if %errorlevel% equ 0 (
+    set "PYTHON_CMD=py -3"
+    goto :python_found
 )
+python --version >nul 2>&1
+if %errorlevel% equ 0 (
+    set "PYTHON_CMD=python"
+    goto :python_found
+)
+echo ERROR: Python is not installed or not in PATH.
+echo Download from https://www.python.org/downloads/
+echo Make sure to check "Add Python to PATH" during install.
+pause
+exit /b 1
+
+:python_found
 echo Python found:
-python --version
+%PYTHON_CMD% --version
 echo.
 
 REM ── Create / reuse venv ─────────────────────────────────────
@@ -31,7 +42,7 @@ if exist "venv\" (
 )
 
 echo Creating virtual environment...
-python -m venv venv
+%PYTHON_CMD% -m venv venv
 if %errorlevel% neq 0 (
     echo ERROR: Failed to create venv. Make sure Python includes the venv module.
     pause

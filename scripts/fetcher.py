@@ -24,7 +24,9 @@ def fetch_ohlc_data(
     or None if no data could be fetched.
     """
     if end_date is None:
-        end_date = datetime.now()
+        # Use tomorrow to ensure today's trading data is included
+        # (yfinance treats end as exclusive)
+        end_date = datetime.now() + timedelta(days=1)
 
     for attempt in range(1, config.max_retries + 1):
         try:

@@ -194,13 +194,21 @@ def update_workbook(
 ) -> tuple[int, int]:
     """Append new OHLC rows to the workbook, skipping duplicates.
 
-    Futures data is only written for the *most recent* trading day (today),
-    not back-filled onto historical rows — the v2.1 bug of stamping every row
-    with today's futures price is fixed here.
+    Futures data is written to the most recent row (last added, or last
+    existing row if no new data was added). This ensures futures are
+    recorded even when running on weekends/holidays.
 
     Returns (added_count, skipped_count).
     """
-    wb = load_workbook(excel_path)
+    try:
+        wb = load_workbook(excel_path)
+    except PermissionError:
+        logger.error(
+            "Cannot open '%s' — the file is locked. "
+            "Please close it in Excel and try again.",
+            excel_path,
+        )
+        raise SystemExit(1)
     ws = wb.active
 
     # Build date-to-row map for duplicate detection and weekly change lookup
@@ -216,7 +224,7 @@ def update_workbook(
     last_row = ws.max_row
     added = 0
     skipped = 0
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    latest_added_row: Optional[int] = None
 
     for date_idx, row_data in data.iterrows():
         date_str = date_idx.strftime("%Y-%m-%d")
@@ -228,6 +236,7 @@ def update_workbook(
 
         last_row += 1
         added += 1
+        latest_added_row = last_row
 
         # A: Day formula (works because B stores a real datetime)
         ws.cell(last_row, 1, f'=TEXT(B{last_row},"dddd")')
@@ -278,24 +287,27 @@ def update_workbook(
             ws.cell(last_row, 12, f'=IF(E{last_row}<E{prev},"L Low","Higher Low")')
             ws.cell(last_row, 12).alignment = _CENTER
 
-        # M–O: Futures — only for the most recent (today's) row
-        if date_str == today_str and futures_price is not None:
-            ws.cell(last_row, 14, futures_price)
-            ws.cell(last_row, 14).number_format = "#,##0.00"
-            ws.cell(last_row, 14).alignment = _CENTER
-
-            if futures_expiry:
-                ws.cell(last_row, 15, futures_expiry)
-                ws.cell(last_row, 15).alignment = _CENTER
-
-            # M: Difference = Future - Close
-            ws.cell(last_row, 13, f"=N{last_row}-F{last_row}")
-            ws.cell(last_row, 13).number_format = "#,##0.00"
-            ws.cell(last_row, 13).alignment = _CENTER
-
         # Thin bottom border for readability
         for col in range(1, 16):
             ws.cell(last_row, col).border = _THIN_BORDER
+
+    # M–O: Futures — write on the most recent row (last added or last existing)
+    if futures_price is not None:
+        fut_row = latest_added_row or ws.max_row
+        if fut_row > 1:  # Skip if only header
+            ws.cell(fut_row, 14, futures_price)
+            ws.cell(fut_row, 14).number_format = "#,##0.00"
+            ws.cell(fut_row, 14).alignment = _CENTER
+
+            if futures_expiry:
+                ws.cell(fut_row, 15, futures_expiry)
+                ws.cell(fut_row, 15).alignment = _CENTER
+
+            # M: Difference = Future - Close
+            ws.cell(fut_row, 13, f"=N{fut_row}-F{fut_row}")
+            ws.cell(fut_row, 13).number_format = "#,##0.00"
+            ws.cell(fut_row, 13).alignment = _CENTER
+            logger.debug("Futures written to row %d.", fut_row)
 
     # Apply Tuesday highlighting to ALL rows (handles existing + new data)
     _apply_all_tuesday_highlights(ws)
@@ -306,7 +318,16 @@ def update_workbook(
     # Ensure freeze panes
     ws.freeze_panes = "A2"
 
-    wb.save(excel_path)
+    try:
+        wb.save(excel_path)
+    except PermissionError:
+        logger.error(
+            "Cannot save '%s' — the file is locked. "
+            "Please close it in Excel and try again.",
+            excel_path,
+        )
+        wb.close()
+        raise SystemExit(1)
     wb.close()
 
     if added:
