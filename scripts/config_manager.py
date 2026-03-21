@@ -112,12 +112,22 @@ def load_config(config_path: str | None = None) -> AppConfig:
 
 
 def save_default_config(config_path: str | None = None) -> None:
-    """Write a default config file if none exists."""
+    """Write a default config file if none exists or if it is empty/corrupt."""
     if config_path is None:
         config_path = str(get_config_path())
     path = Path(config_path)
+
+    # Skip only if the file exists AND contains valid JSON with real data
     if path.exists():
-        return
+        try:
+            text = path.read_text(encoding="utf-8").strip()
+            if text:
+                data = json.loads(text)
+                if isinstance(data, dict) and data.get("ticker"):
+                    return  # file is valid — nothing to do
+        except (json.JSONDecodeError, OSError):
+            pass  # corrupt/unreadable — overwrite with defaults
+        logger.warning("Config file is empty or corrupt — resetting to defaults.")
 
     path.parent.mkdir(parents=True, exist_ok=True)
     default = {
