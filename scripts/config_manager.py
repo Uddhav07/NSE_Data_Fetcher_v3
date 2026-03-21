@@ -87,7 +87,17 @@ def load_config(config_path: str | None = None) -> AppConfig:
     known_fields = {f.name for f in config.__dataclass_fields__.values()}
     for key, value in data.items():
         if key in known_fields:
-            setattr(config, key, value)
+            # Type-check: don't write garbage types into fields
+            expected = type(getattr(config, key))
+            if isinstance(value, expected) or (expected is int and isinstance(value, (int, float))):
+                if expected is int and isinstance(value, float):
+                    value = int(value)
+                setattr(config, key, value)
+            else:
+                logger.warning(
+                    "Config key '%s': expected %s, got %s — using default.",
+                    key, expected.__name__, type(value).__name__,
+                )
         elif key not in ("description", "notes"):
             logger.warning("Unknown config key ignored: '%s'", key)
 
@@ -96,7 +106,7 @@ def load_config(config_path: str | None = None) -> AppConfig:
     if errors:
         for err in errors:
             logger.error("Config validation error: %s", err)
-        raise ValueError(f"Configuration has {len(errors)} error(s). Check logs.")
+        raise ValueError(f"Configuration has {len(errors)} error(s): {'; '.join(errors)}")
 
     return config
 

@@ -54,12 +54,12 @@ def _check_environment() -> list[str]:
         except ImportError:
             issues.append(f"Missing package: {pkg}. Run: pip install -r requirements.txt")
 
-    # Network check (lightweight)
+    # Network check (lightweight — test actual data source)
     try:
         import requests as _req
-        _req.head("https://www.google.com", timeout=5)
+        _req.head("https://query1.finance.yahoo.com", timeout=5)
     except Exception:
-        issues.append("No internet connection detected. Data fetch will fail.")
+        issues.append("Cannot reach Yahoo Finance. Check your internet connection.")
 
     return issues
 
@@ -188,6 +188,8 @@ def run_fetch(
         logger.warning("ENV CHECK: %s", issue)
     if any("Missing package" in i for i in issues):
         return FetchResult(error="Critical packages missing.")
+    if any("Cannot reach" in i for i in issues):
+        logger.warning("Network issue detected — will attempt fetch anyway.")
 
     excel_path = str(resolve_relative(config.excel_file))
 
@@ -242,11 +244,17 @@ def run_fetch(
         futures_price, futures_expiry = fetch_futures(config)
 
     # Write to Excel
-    added, skipped = update_workbook(
-        excel_path, data,
-        futures_price=futures_price,
-        futures_expiry=futures_expiry,
-    )
+    try:
+        added, skipped = update_workbook(
+            excel_path, data,
+            futures_price=futures_price,
+            futures_expiry=futures_expiry,
+        )
+    except PermissionError as exc:
+        return FetchResult(
+            error=str(exc),
+            excel_path=excel_path,
+        )
 
     logger.info("=" * 60)
     logger.info("Update complete!  Added: %d  |  Skipped: %d", added, skipped)

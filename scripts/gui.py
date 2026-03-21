@@ -2,10 +2,10 @@
 
 import logging
 import os
-import subprocess
 import threading
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
+from datetime import datetime
 from typing import Optional
 
 from . import __version__
@@ -17,6 +17,7 @@ from .paths import (
     resolve_relative,
 )
 from .main import FetchResult, run_fetch, setup_logging
+from .excel_writer import get_last_date
 
 logger = logging.getLogger(__name__)
 
@@ -29,17 +30,26 @@ class _TextWidgetHandler(logging.Handler):
     def __init__(self, text_widget: scrolledtext.ScrolledText) -> None:
         super().__init__()
         self._widget = text_widget
+        self._closed = False
 
     def emit(self, record: logging.LogRecord) -> None:
+        if self._closed:
+            return
         msg = self.format(record) + "\n"
-        # Schedule on the main thread via after()
-        self._widget.after(0, self._append, msg)
+        try:
+            self._widget.after(0, self._append, msg)
+        except (tk.TclError, RuntimeError):
+            # Widget was destroyed (app closing) — silently ignore
+            self._closed = True
 
     def _append(self, msg: str) -> None:
-        self._widget.configure(state="normal")
-        self._widget.insert(tk.END, msg)
-        self._widget.see(tk.END)
-        self._widget.configure(state="disabled")
+        try:
+            self._widget.configure(state="normal")
+            self._widget.insert(tk.END, msg)
+            self._widget.see(tk.END)
+            self._widget.configure(state="disabled")
+        except tk.TclError:
+            self._closed = True
 
 
 # ── Settings dialog ───────────────────────────────────────────────────────────
@@ -98,6 +108,51 @@ class _SettingsDialog(tk.Toplevel):
 
     def _save(self) -> None:
         import json
+
+        # ── Validate before saving ────────────────────────────────────
+        errors: list[str] = []
+
+        ticker = self._vars["ticker"].get().strip()
+        if not ticker:
+            errors.append("Ticker cannot be empty.")
+
+        start_date = self._vars["start_date"].get().strip()
+        try:
+            datetime.strptime(start_date, "%Y-%m-%d")
+        except ValueError:
+            errors.append(f"Invalid start date: '{start_date}'. Use YYYY-MM-DD format.")
+
+        log_level = self._vars["log_level"].get().strip().upper()
+        if log_level not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
+            errors.append(f"Invalid log level: '{log_level}'.")
+
+        try:
+            retries = self._vars["max_retries"].get()
+            if retries < 0:
+                errors.append("Max retries must be >= 0.")
+        except (tk.TclError, ValueError):
+            errors.append("Max retries must be a number.")
+
+        try:
+            timeout = self._vars["request_timeout"].get()
+            if timeout < 1:
+                errors.append("Request timeout must be >= 1 second.")
+        except (tk.TclError, ValueError):
+            errors.append("Request timeout must be a number.")
+
+        excel_file = self._vars["excel_file"].get().strip()
+        if not excel_file:
+            errors.append("Excel file path cannot be empty.")
+
+        if errors:
+            messagebox.showwarning(
+                "Validation Error",
+                "Please fix the following:\n\n• " + "\n• ".join(errors),
+                parent=self,
+            )
+            return
+
+        # ── Write to file ─────────────────────────────────────────────
         cfg_path = get_config_path()
         try:
             with open(cfg_path, "r", encoding="utf-8") as f:
@@ -106,7 +161,10 @@ class _SettingsDialog(tk.Toplevel):
             data = {}
 
         for attr, var in self._vars.items():
-            data[attr] = var.get()
+            try:
+                data[attr] = var.get()
+            except (tk.TclError, ValueError):
+                pass  # keep existing value if widget has bad data
 
         cfg_path.parent.mkdir(parents=True, exist_ok=True)
         with open(cfg_path, "w", encoding="utf-8") as f:
@@ -131,9 +189,13 @@ class App(tk.Tk):
 
         self._running = False
         self._config: Optional[AppConfig] = None
+        self._action_buttons: list[ttk.Button] = []  # buttons to disable during fetch
 
         self._build_ui()
         self._init_app()
+
+        # Intercept window close to warn if fetch is running
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
 
     # ── Icon ──────────────────────────────────────────────────────────────
 
@@ -188,23 +250,63 @@ class App(tk.Tk):
         bot = ttk.Frame(self, padding=(12, 6))
         bot.pack(fill="x")
 
-        ttk.Button(bot, text="⚙  Settings", command=self._on_settings).pack(side="left", padx=4)
-        ttk.Button(bot, text="📁  Data Folder", command=self._on_open_folder).pack(side="left", padx=4)
+        self._btn_settings = ttk.Button(bot, text="⚙  Settings",
+                                         command=self._on_settings)
+        self._btn_settings.pack(side="left", padx=4)
+        self._btn_folder = ttk.Button(bot, text="📁  Data Folder",
+                                       command=self._on_open_folder)
+        self._btn_folder.pack(side="left", padx=4)
         ttk.Button(bot, text="ℹ  About", command=self._on_about).pack(side="left", padx=4)
-        ttk.Button(bot, text="Full Refresh", command=self._on_full_refresh).pack(side="right", padx=4)
+        self._btn_refresh = ttk.Button(bot, text="Full Refresh",
+                                        command=self._on_full_refresh)
+        self._btn_refresh.pack(side="right", padx=4)
+
+        # Collect all buttons that should be disabled during a fetch
+        self._action_buttons = [
+            self._btn_update, self._btn_open, self._btn_settings,
+            self._btn_folder, self._btn_refresh,
+        ]
 
     # ── Initialization ────────────────────────────────────────────────────
 
     def _init_app(self) -> None:
         ensure_dirs()
         save_default_config()
-        self._config = load_config()
+
+        try:
+            self._config = load_config()
+        except (ValueError, Exception) as exc:
+            # Config is corrupt — reset to defaults and warn user
+            logger.warning("Config error: %s — resetting to defaults.", exc)
+            cfg_path = get_config_path()
+            try:
+                cfg_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+            save_default_config()
+            self._config = load_config()
+            messagebox.showwarning(
+                "Configuration Reset",
+                f"Your settings file had errors and was reset to defaults.\n\n"
+                f"Original error: {exc}",
+            )
 
         # Set up logging to file + GUI text widget
         handler = _TextWidgetHandler(self._log_text)
         setup_logging(self._config, extra_handler=handler)
 
-        self._status_var.set("Ready — click Update Data to fetch latest prices.")
+        # Show last-updated date if Excel file exists
+        status = "Ready — click Update Data to fetch latest prices."
+        try:
+            excel_path = str(resolve_relative(self._config.excel_file))
+            if os.path.exists(excel_path):
+                last = get_last_date(excel_path)
+                if last is not None:
+                    status = f"Last updated: {last.strftime('%Y-%m-%d')} — click Update Data for latest."
+        except Exception:
+            pass  # don't crash on startup for a status message
+
+        self._status_var.set(status)
 
     # ── Button handlers ───────────────────────────────────────────────────
 
@@ -224,7 +326,8 @@ class App(tk.Tk):
         if self._running:
             return
         self._running = True
-        self._btn_update.configure(state="disabled")
+        for btn in self._action_buttons:
+            btn.configure(state="disabled")
         self._progress.start(12)
         self._status_var.set("Fetching data — please wait…")
 
@@ -249,7 +352,8 @@ class App(tk.Tk):
     def _on_fetch_done(self, result: FetchResult) -> None:
         self._progress.stop()
         self._running = False
-        self._btn_update.configure(state="normal")
+        for btn in self._action_buttons:
+            btn.configure(state="normal")
 
         if result.ok:
             if result.added:
@@ -276,11 +380,17 @@ class App(tk.Tk):
             )
 
     def _on_settings(self) -> None:
-        if self._config is None:
+        if self._config is None or self._running:
             return
         _SettingsDialog(self, self._config)
-        # Reload config after dialog closes
-        self._config = load_config()
+        # Reload config after dialog closes (safely — handle corrupt file)
+        try:
+            self._config = load_config()
+        except (ValueError, Exception) as exc:
+            messagebox.showwarning(
+                "Config Error",
+                f"Settings may not have saved correctly.\n\n{exc}",
+            )
 
     def _on_open_folder(self) -> None:
         folder = str(resolve_relative("data"))
@@ -296,6 +406,18 @@ class App(tk.Tk):
             "professional Excel output.\n\n"
             "github.com/Uddhav07/NSE_Data_Fetcher_v3",
         )
+
+    def _on_close(self) -> None:
+        """Handle window close — warn if fetch is in progress."""
+        if self._running:
+            if not messagebox.askyesno(
+                "Fetch in Progress",
+                "Data is still being downloaded.\n\n"
+                "If you close now, the current fetch will be interrupted "
+                "and partial data may not be saved.\n\nClose anyway?",
+            ):
+                return
+        self.destroy()
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────

@@ -210,12 +210,10 @@ def update_workbook(
     try:
         wb = load_workbook(excel_path)
     except PermissionError:
-        logger.error(
-            "Cannot open '%s' — the file is locked. "
-            "Please close it in Excel and try again.",
-            excel_path,
-        )
-        raise SystemExit(1)
+        msg = (f"Cannot open '{excel_path}' — the file is locked. "
+               "Please close it in Excel and try again.")
+        logger.error(msg)
+        raise PermissionError(msg)
     ws = wb.active
 
     # Build date-to-row map for duplicate detection and weekly change lookup
@@ -328,13 +326,11 @@ def update_workbook(
     try:
         wb.save(excel_path)
     except PermissionError:
-        logger.error(
-            "Cannot save '%s' — the file is locked. "
-            "Please close it in Excel and try again.",
-            excel_path,
-        )
+        msg = (f"Cannot save '{excel_path}' — the file is locked. "
+               "Please close it in Excel and try again.")
+        logger.error(msg)
         wb.close()
-        raise SystemExit(1)
+        raise PermissionError(msg)
     wb.close()
 
     if added:
