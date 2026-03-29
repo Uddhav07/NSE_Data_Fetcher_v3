@@ -201,7 +201,6 @@ Python packages (installed automatically by `setup.bat`):
 yfinance >= 0.2.31
 pandas >= 2.0.0
 openpyxl >= 3.1.0
-beautifulsoup4 >= 4.12.0
 requests >= 2.31.0
 ```
 

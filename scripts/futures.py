@@ -86,7 +86,7 @@ def _fetch_from_groww(config: AppConfig) -> FuturesResult:
         try:
             raw = contract["contractDetails"]["expiry"]
             dt = datetime.strptime(raw, "%Y-%m-%d")
-            expiry = dt.strftime("%d %b %Y")
+            expiry = f"NIFTY {dt.strftime('%b')} {dt.year} Fut"
         except (KeyError, TypeError, ValueError):
             expiry = None
 

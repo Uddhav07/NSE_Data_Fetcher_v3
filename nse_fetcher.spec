@@ -40,7 +40,6 @@ a = Analysis(
         "openpyxl.formatting",
         "openpyxl.formatting.rule",
         "requests",
-        "json",
         "appdirs",
         "lxml",
         "html5lib",

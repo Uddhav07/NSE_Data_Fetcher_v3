@@ -20,16 +20,15 @@ if getattr(sys, "frozen", False):
         _exe_dir = os.path.dirname(sys.executable)
         _bundled_cfg = os.path.join(_meipass, "config", "config.json")
         _local_cfg = os.path.join(_exe_dir, "config", "config.json")
+        import shutil
         if os.path.exists(_bundled_cfg) and not os.path.exists(_local_cfg):
             os.makedirs(os.path.join(_exe_dir, "config"), exist_ok=True)
-            import shutil
             shutil.copy2(_bundled_cfg, _local_cfg)
         # Also copy icon if missing
         _bundled_ico = os.path.join(_meipass, "assets", "icon.ico")
         _local_ico = os.path.join(_exe_dir, "assets", "icon.ico")
         if os.path.exists(_bundled_ico) and not os.path.exists(_local_ico):
             os.makedirs(os.path.join(_exe_dir, "assets"), exist_ok=True)
-            import shutil
             shutil.copy2(_bundled_ico, _local_ico)
 
 

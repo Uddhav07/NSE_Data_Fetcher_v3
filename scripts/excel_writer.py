@@ -290,8 +290,8 @@ def update_workbook(
             ws.cell(last_row, 12, f'=IF(E{last_row}<E{prev},"L Low","Higher Low")')
             ws.cell(last_row, 12).alignment = _CENTER
 
-        # Thin bottom border for readability (A–O only, skip P to preserve user comments)
-        for col in range(1, 16):
+        # Thin bottom border for readability
+        for col in range(1, len(COLUMNS) + 1):
             ws.cell(last_row, col).border = _THIN_BORDER
 
     # M–O: Futures — write on the most recent row (last added or last existing)
@@ -327,9 +327,9 @@ def update_workbook(
         msg = (f"Cannot save '{excel_path}' — the file is locked. "
                "Please close it in Excel and try again.")
         logger.error(msg)
-        wb.close()
         raise PermissionError(msg)
-    wb.close()
+    finally:
+        wb.close()
 
     if added:
         logger.info("Added %d new row(s) to %s.", added, excel_path)
