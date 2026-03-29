@@ -49,6 +49,7 @@ COLUMNS = [
     ("Diff in\nFuture",              9.5,  "plain"),   # M
     ("Future\nas on Date",          13.0,  "plain"),   # N
     ("Future\nExpiry",              13.0,  "plain"),   # O
+    ("Comments",                    30.0,  "plain"),   # P — user notes (never overwritten)
 ]
 
 
@@ -125,12 +126,12 @@ def get_last_date(excel_path: str) -> Optional[datetime]:
 
 
 def _apply_all_tuesday_highlights(ws) -> None:
-    """Scan ALL data rows and highlight entire Tuesday rows (all columns A-O).
+    """Scan ALL data rows and highlight entire Tuesday rows (all columns A-P).
 
-    Also clears any stale day-based highlights on non-Tuesday rows.
+    Only applies fill to Tuesday rows — non-Tuesday rows are left untouched
+    so that user-applied formatting and cell comments are preserved.
     """
-    num_cols = len(COLUMNS)  # 15 (A through O)
-    no_fill = PatternFill(fill_type=None)
+    num_cols = len(COLUMNS)  # 16 (A through P)
     for row in range(2, ws.max_row + 1):
         val = ws.cell(row, 2).value
         if val is None:
@@ -148,9 +149,6 @@ def _apply_all_tuesday_highlights(ws) -> None:
         if dt.weekday() == 1:  # Tuesday
             for col in range(1, num_cols + 1):
                 ws.cell(row, col).fill = _TUESDAY_FILL
-        else:
-            for col in range(1, num_cols + 1):
-                ws.cell(row, col).fill = no_fill
 
 
 def _add_conditional_formatting(ws) -> None:
@@ -292,7 +290,7 @@ def update_workbook(
             ws.cell(last_row, 12, f'=IF(E{last_row}<E{prev},"L Low","Higher Low")')
             ws.cell(last_row, 12).alignment = _CENTER
 
-        # Thin bottom border for readability
+        # Thin bottom border for readability (A–O only, skip P to preserve user comments)
         for col in range(1, 16):
             ws.cell(last_row, col).border = _THIN_BORDER
 
