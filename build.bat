@@ -38,12 +38,13 @@ echo.
 REM ── Clean previous build ────────────────────────────────────
 echo [2/4] Cleaning previous build...
 if exist "build" rmdir /s /q build
+if exist "dist\NSE Data Fetcher.exe" del /f "dist\NSE Data Fetcher.exe"
 if exist "dist\NSE Data Fetcher" rmdir /s /q "dist\NSE Data Fetcher"
 echo       Done.
 echo.
 
 REM ── PyInstaller ─────────────────────────────────────────────
-echo [3/4] Building with PyInstaller...
+echo [3/4] Building with PyInstaller (one-file mode)...
 pyinstaller nse_fetcher.spec --noconfirm
 if %errorlevel% neq 0 (
     echo [ERROR] PyInstaller build failed. Check output above.
@@ -51,21 +52,8 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-REM ── Copy config to dist (in case spec didn't bundle it) ────
-if not exist "dist\NSE Data Fetcher\config" mkdir "dist\NSE Data Fetcher\config"
-if not exist "dist\NSE Data Fetcher\config\config.json" (
-    copy /y "config\config.json" "dist\NSE Data Fetcher\config\"
-)
-if not exist "dist\NSE Data Fetcher\assets" mkdir "dist\NSE Data Fetcher\assets"
-if not exist "dist\NSE Data Fetcher\assets\icon.ico" (
-    copy /y "assets\icon.ico" "dist\NSE Data Fetcher\assets\"
-)
-REM Create runtime directories
-if not exist "dist\NSE Data Fetcher\data" mkdir "dist\NSE Data Fetcher\data"
-if not exist "dist\NSE Data Fetcher\logs" mkdir "dist\NSE Data Fetcher\logs"
-if not exist "dist\NSE Data Fetcher\archive" mkdir "dist\NSE Data Fetcher\archive"
 echo       PyInstaller build complete.
-echo       Output: dist\NSE Data Fetcher\NSE Data Fetcher.exe
+echo       Output: dist\NSE Data Fetcher.exe
 echo.
 
 REM ── Inno Setup (optional) ──────────────────────────────────
@@ -108,7 +96,7 @@ echo ============================================================
 echo   Build complete!
 echo ============================================================
 echo.
-echo   Standalone exe : dist\NSE Data Fetcher\NSE Data Fetcher.exe
+echo   Standalone exe : dist\NSE Data Fetcher.exe
 if not "%ISCC%"=="" echo   Installer       : dist\installer\NSE_Data_Fetcher_Setup.exe
 echo.
 pause

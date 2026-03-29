@@ -13,6 +13,25 @@ import os
 if getattr(sys, "frozen", False):
     os.chdir(os.path.dirname(sys.executable))
 
+    # One-file mode: bundled assets live in _MEIPASS temp dir.
+    # Copy default config next to the exe on first run so the app can find it.
+    _meipass = getattr(sys, "_MEIPASS", None)
+    if _meipass:
+        _exe_dir = os.path.dirname(sys.executable)
+        _bundled_cfg = os.path.join(_meipass, "config", "config.json")
+        _local_cfg = os.path.join(_exe_dir, "config", "config.json")
+        if os.path.exists(_bundled_cfg) and not os.path.exists(_local_cfg):
+            os.makedirs(os.path.join(_exe_dir, "config"), exist_ok=True)
+            import shutil
+            shutil.copy2(_bundled_cfg, _local_cfg)
+        # Also copy icon if missing
+        _bundled_ico = os.path.join(_meipass, "assets", "icon.ico")
+        _local_ico = os.path.join(_exe_dir, "assets", "icon.ico")
+        if os.path.exists(_bundled_ico) and not os.path.exists(_local_ico):
+            os.makedirs(os.path.join(_exe_dir, "assets"), exist_ok=True)
+            import shutil
+            shutil.copy2(_bundled_ico, _local_ico)
+
 
 def _fatal_error(title: str, msg: str) -> None:
     """Show a native error dialog even if tkinter only partially loaded."""

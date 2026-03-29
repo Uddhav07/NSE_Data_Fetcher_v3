@@ -37,8 +37,11 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-; Copy the entire PyInstaller output folder
-Source: "..\dist\NSE Data Fetcher\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Single exe from PyInstaller one-file build
+Source: "..\dist\NSE Data Fetcher.exe"; DestDir: "{app}"; Flags: ignoreversion
+
+; Bundle icon for the GUI
+Source: "..\assets\icon.ico"; DestDir: "{app}\assets"; Flags: ignoreversion
 
 ; Ensure default config is present (don't overwrite user's config on upgrade)
 Source: "..\config\config.json"; DestDir: "{app}\config"; Flags: onlyifdoesntexist
