@@ -17,18 +17,43 @@ cd NSE_Data_Fetcher_v3
 ```
 **macOS double-click:** use `setup.command` / `run.command` in Finder (a `.sh` file opens in an editor instead of running). If macOS blocks it the first time: right-click → Open.
 
-**Windows (Python 3.9+, tick "Add to PATH" when installing):** double-click `setup.bat` once, then `run.bat`
-(or `run.bat --full-refresh --start 2026-01-01` from a terminal for the first build). Equivalent manual commands:
-```bat
-python -m venv venv
-venv\Scripts\python.exe -m pip install -r requirements.txt
-venv\Scripts\python.exe -m scripts.main --full-refresh --start 2026-01-01
-venv\Scripts\python.exe -m scripts.main
-```
-The Windows scripts are untested on a real Windows machine; the Python code is cross-platform and opens Excel via `os.startfile`.
-
 Close the workbook in Excel before running (a locked file gives a friendly error).
 The sheet opens scrolled to the latest date.
+
+## Windows — step by step (PowerShell, copy & paste)
+Needs Python 3.9+ (tick **"Add python.exe to PATH"** in the installer) and Git. Everything runs inside a project venv;
+the commands call `venv\Scripts\python.exe` directly, so no activation is required.
+Shortcut: double-click `setup.bat` once, then `run.bat` each day (untested on a real Windows machine).
+
+```powershell
+python --version
+cd $HOME\Documents
+git clone https://github.com/Uddhav07/NSE_Data_Fetcher_v3.git
+cd NSE_Data_Fetcher_v3
+```
+One-time setup (venv + packages) and the first build from Jan 2026:
+```powershell
+python -m venv venv
+venv\Scripts\python.exe -m pip install --upgrade pip
+venv\Scripts\python.exe -m pip install -r requirements.txt
+venv\Scripts\python.exe -m scripts.main --full-refresh --start 2026-01-01
+```
+Every day after 15:35 IST, with the Excel file closed:
+```powershell
+cd $HOME\Documents\NSE_Data_Fetcher_v3
+venv\Scripts\python.exe -m scripts.main
+```
+Options: `--no-futures`, `--no-rsi`. Update the project: `git pull` then
+`venv\Scripts\python.exe -m pip install -r requirements.txt`.
+
+Optional — activate the venv to type plain `python`:
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned   # only if activation is blocked
+venv\Scripts\Activate.ps1
+python -m scripts.main
+deactivate
+```
+In Command Prompt (cmd) activate with `venv\Scripts\activate.bat`.
 
 ## Options
 ```

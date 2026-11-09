@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.2.3
+### Changed
+- README: full copy-paste Windows (PowerShell/cmd) instructions with venv support.
+
 ## 3.2.2
 ### Added
 - `setup.bat` / `run.bat` for Windows (double-click; untested on real Windows).
