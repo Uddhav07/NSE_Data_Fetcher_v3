@@ -188,7 +188,7 @@ def test_layout_B_to_C_adds_rsi60_without_losing_anything(tmp_path):
     ws["M3"] = "=T3-F3"
     wb.save(p)
     # next run brings RSI 60m data -> the new (empty) column is filled, nothing else changes
-    update_workbook(p, _df(["2026-01-05", "2026-01-06"]), rsi={"2026-01-05": {60: 65.0, 5: 99.0}})
+    update_workbook(p, _df(["2026-01-05", "2026-01-06"]), rsi={"2026-01-05": {60: 65.0}})
     _check_c(p)
     # idempotent
     snap = [[c.value for c in row] for row in load_workbook(p).active.iter_rows()]
@@ -236,3 +236,57 @@ def test_formatted_as_table_for_filtering(tmp_path):
     assert list(ws.tables) == ["NSE_Table"] and ws.tables["NSE_Table"].ref == "A1:W5"
     update_workbook(p, _df(["2026-01-02"]))
     assert load_workbook(p).active.tables["NSE_Table"].ref == "A1:W5"
+
+
+def _row_of(ws, ds):
+    for r in range(2, ws.max_row + 1):
+        v = ws.cell(r, 2).value
+        if v is not None and v.strftime("%Y-%m-%d") == ds:
+            return r
+
+
+def test_recent_values_selfcorrect_but_edits_are_kept(tmp_path):
+    p = str(tmp_path / "t.xlsx")
+    create_workbook(p)
+    dates = ["2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08", "2026-01-09"]
+    v1 = _df(dates)
+    r1 = {d: {5: 60.0, 15: 61.0} for d in dates}
+    update_workbook(p, v1, rsi=r1)                       # provisional values written + remembered
+
+    # the user edits one RSI cell (latest day) and one Close (an old day)
+    wb = load_workbook(p); ws = wb.active
+    last = _row_of(ws, "2026-01-09")
+    ws.cell(last, 16).value = 33.3                       # RSI 15m user edit
+    ws.cell(_row_of(ws, "2026-01-05"), 6).value = 1.0    # old Close edit
+    wb.save(p)
+
+    # data source now returns FINAL numbers for every day
+    v2 = _df(dates).copy(); v2["Close"] = v2["Close"] + 50
+    r2 = {d: {5: 70.0, 15: 71.0} for d in dates}
+    update_workbook(p, v2, rsi=r2)
+    ws = load_workbook(p).active
+    # latest 3 sessions: untouched-by-user script values refreshed
+    assert ws.cell(last, 15).value == 70.0                          # RSI 5m refreshed
+    assert ws.cell(last, 6).value == v2.loc["2026-01-09", "Close"].round(2)
+    # user's edit on a recent row is kept
+    assert ws.cell(last, 16).value == 33.3
+    # older than the window: not refreshed (still the first-run value), and user edit kept
+    assert ws.cell(_row_of(ws, "2026-01-06"), 15).value == 60.0
+    assert ws.cell(_row_of(ws, "2026-01-05"), 6).value == 1.0
+
+
+def test_legacy_values_need_explicit_refresh_recent(tmp_path):
+    import os
+    p = str(tmp_path / "t.xlsx")
+    create_workbook(p)
+    dates = ["2026-01-05", "2026-01-06", "2026-01-07"]
+    update_workbook(p, _df(dates), rsi={d: {5: 60.0} for d in dates})
+    os.remove(str(tmp_path / "t.state.json"))            # simulate a sheet from before the ledger
+    v2 = _df(dates).copy(); v2["Close"] = v2["Close"] + 50
+    r2 = {d: {5: 80.0} for d in dates}
+    update_workbook(p, v2, rsi=r2)                        # unknown provenance -> left alone
+    ws = load_workbook(p).active
+    assert ws["O4"].value == 60.0
+    update_workbook(p, v2, rsi=r2, refresh_recent=2)      # explicit request -> overwritten (2 rows)
+    ws = load_workbook(p).active
+    assert ws["O4"].value == 80.0 and ws["O3"].value == 80.0 and ws["O2"].value == 60.0

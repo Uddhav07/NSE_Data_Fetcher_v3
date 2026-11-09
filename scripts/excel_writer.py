@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import shutil
@@ -436,6 +437,78 @@ def _ensure_formulas(ws) -> None:
             m.value = f"=U{row}-F{row}"
 
 
+# ── Ledger of values the script itself wrote (lets recent days self-correct) ───
+
+_REFRESH_WINDOW = 3                      # sessions that may still be revised by the data source
+_TRACKED_COLS = [3, 4, 5, 6] + list(_RSI_COLS.values())   # Open/High/Low/Close + RSI columns
+
+
+def _state_path(excel_path: str) -> Path:
+    return Path(excel_path).with_suffix(".state.json")
+
+
+def _load_state(excel_path: str) -> dict:
+    try:
+        return json.loads(_state_path(excel_path).read_text(encoding="utf-8")).get("cells", {})
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_state(excel_path: str, cells: dict) -> None:
+    keep = sorted(cells)[-10:]            # only the most recent dates matter
+    try:
+        _state_path(excel_path).write_text(
+            json.dumps({"version": 1, "cells": {d: cells[d] for d in keep}}, indent=1),
+            encoding="utf-8")
+    except OSError as exc:
+        logger.warning("Could not save refresh ledger: %s", exc)
+
+
+def _tracked_values(ws) -> dict:
+    out = {}
+    for ds, row in _dated_rows(ws):
+        out[ds] = {c: ws.cell(row, c).value for c in _TRACKED_COLS}
+    return out
+
+
+def _is_num(v) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def _refresh_recent(ws, data, rsi, state: dict, force_rows: int) -> int:
+    """Re-check the latest sessions against the newest data.
+
+    Intraday feeds revise their final candles after the close. A cell is
+    overwritten only if it still holds exactly the value this script wrote
+    (so your edits are never touched) — or, with ``force_rows``, for the
+    latest N rows regardless (explicit ``--refresh-recent``). Returns #cells changed.
+    """
+    dated = _dated_rows(ws)
+    n = force_rows or _REFRESH_WINDOW
+    by_date = {d.strftime("%Y-%m-%d"): r for d, r in data.iterrows()}
+    changed = 0
+    for ds, row in dated[-n:]:
+        new_vals = {}
+        if ds in by_date:
+            for off, field in enumerate(["Open", "High", "Low", "Close"]):
+                new_vals[3 + off] = round(float(by_date[ds][field]), 2)
+        for minutes, col in _RSI_COLS.items():
+            v = (rsi or {}).get(ds, {}).get(minutes)
+            if v is not None:
+                new_vals[col] = round(float(v), 2)
+        for col, new in new_vals.items():
+            cell = ws.cell(row, col)
+            old = cell.value
+            if not _is_num(old) or abs(old - new) < 0.005:
+                continue
+            rec = state.get(ds, {}).get(str(col))
+            if force_rows or (rec is not None and abs(old - rec) < 0.005):
+                cell.value = new
+                state.setdefault(ds, {})[str(col)] = new
+                changed += 1
+    return changed
+
+
 def _write_new_row(ws, row: int, date_idx, row_data) -> None:
     """Write a freshly inserted row's values and styling (formulas come later)."""
     ws.cell(row, 2, date_idx.to_pydatetime().replace(tzinfo=None))
@@ -500,6 +573,7 @@ def update_workbook(
     futures_price: Optional[float] = None,
     futures_expiry: Optional[str] = None,
     rsi: Optional[dict] = None,
+    refresh_recent: int = 0,
 ) -> tuple[int, int]:
     """Bring the workbook up to date without touching what is already there.
 
@@ -523,6 +597,8 @@ def update_workbook(
     _ensure_headers(ws)
     _normalize_headers(ws)
 
+    state = _load_state(excel_path)           # values this script wrote earlier
+    before = _tracked_values(ws)
     existing = dict(_dated_rows(ws))  # date_str -> row
     added = skipped = 0
     shifted = False  # True if a missing day was inserted above existing rows
@@ -587,6 +663,16 @@ def update_workbook(
     # 5) Nakshatra / RSI — only into empty cells
     _fill_derived_columns(ws, rsi)
 
+    # 5b) latest sessions: pick up the data source's final values for cells the script wrote
+    refreshed = _refresh_recent(ws, data, rsi, state, refresh_recent)
+    if refreshed:
+        logger.info("Refreshed %d recent value(s) with the data source's final numbers.", refreshed)
+    after = _tracked_values(ws)
+    for ds, cols in after.items():            # remember what was newly written this run
+        for col, val in cols.items():
+            if _is_num(val) and before.get(ds, {}).get(col) in (None, ""):
+                state.setdefault(ds, {})[str(col)] = val
+
     _add_conditional_formatting(ws)
     _apply_table(ws)
     ws.freeze_panes = "A2"
@@ -602,6 +688,7 @@ def update_workbook(
         raise PermissionError(msg)
     finally:
         wb.close()
+    _save_state(excel_path, state)
 
     if added:
         logger.info("Added %d new row(s) to %s.", added, excel_path)

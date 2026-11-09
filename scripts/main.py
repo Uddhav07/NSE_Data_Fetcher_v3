@@ -6,6 +6,7 @@ Usage (CLI):
     python -m scripts.main --start 2026-06-01
     python -m scripts.main --no-futures     # skip futures scraping
     python -m scripts.main --no-rsi         # skip intraday RSI
+    python -m scripts.main --refresh-recent # re-pull latest 3 rows (fixes values saved before close)
 
 """
 
@@ -152,6 +153,12 @@ def _parse_args() -> argparse.Namespace:
         help="Skip intraday RSI columns (R-U)",
     )
     parser.add_argument(
+        "--refresh-recent", nargs="?", const=3, type=int, default=0, metavar="N",
+        help="Overwrite Open/High/Low/Close and RSI of the latest N rows (default 3) with fresh "
+             "data, even if the script wrote them earlier. Use once to correct values saved "
+             "before a session was final.",
+    )
+    parser.add_argument(
         "--version", action="version", version=f"%(prog)s {__version__}",
     )
     return parser.parse_args()
@@ -182,6 +189,7 @@ def run_fetch(
     full_refresh: bool = False,
     no_futures: bool = False,
     no_rsi: bool = False,
+    refresh_recent: int = 0,
     open_excel: Optional[bool] = None,
 ) -> FetchResult:
     """Execute the data-fetch pipeline. Returns a FetchResult.
@@ -274,6 +282,7 @@ def run_fetch(
             futures_price=futures_price,
             futures_expiry=futures_expiry,
             rsi=rsi_map,
+            refresh_recent=refresh_recent,
         )
     except PermissionError as exc:
         return FetchResult(error=str(exc), excel_path=excel_path)
@@ -306,6 +315,7 @@ def run() -> None:
         full_refresh=args.full_refresh,
         no_futures=args.no_futures,
         no_rsi=args.no_rsi,
+        refresh_recent=args.refresh_recent,
     )
 
     if not result.ok:

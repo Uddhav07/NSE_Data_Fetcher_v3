@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.7.0
+### Fixed
+- **Stale "final" values:** Yahoo revises its last intraday candles (and the day's close) after the session, but a value saved a little too early stayed frozen. The script now keeps a ledger of the OHLC/RSI values it wrote (`data/<workbook>.state.json`) and, for the latest 3 sessions, refreshes a cell to the final number **only if it still holds exactly what the script wrote** — your edits are never touched.
+### Added
+- `--refresh-recent [N]`: one-time explicit overwrite of the latest N rows (default 3) for sheets created before the ledger existed.
+
 ## 3.6.0
 ### Added
 - **RSI 60m** column (S), 14-period RSI on 60-minute candles at the 15:30 IST close. Yahoo keeps ~2 years of hourly data, so it fills back much further than the 5/15/30/45m columns.

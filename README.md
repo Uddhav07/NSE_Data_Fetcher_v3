@@ -128,6 +128,8 @@ To stop it: `schtasks /Delete /TN "NSE Data Fetcher" /F`. Set `"open_excel_after
 ./run.sh --full-refresh --start DATE   rebuild (old file is backed up to archive/ first)
 ./run.sh --no-futures                  skip Groww futures
 ./run.sh --no-rsi                      skip intraday RSI
+./run.sh --refresh-recent              one-time fix: overwrite the latest 3 rows' prices/RSI with fresh data
+                                        (use if a value was saved before the session was final; `--refresh-recent 5` for 5 rows)
 ./run.sh --config PATH                 use another config.json
 ```
 
@@ -158,7 +160,10 @@ Notes on the intraday data: Yahoo keeps only ~60 days of 5/15/30-min history (so
 
 ## Your edits are safe
 The script only **adds missing rows** and **fills empty cells**. It never rewrites a cell that has a value,
-nor your fills, fonts, headers, notes or your own conditional-format rules. Futures are written once per
+nor your fills, fonts, headers, notes or your own conditional-format rules.
+The one exception: Yahoo revises its final intraday candles after the close, so for the **latest 3 sessions** the script re-checks the
+Open/High/Low/Close and RSI cells *it wrote itself* and updates them to the final numbers — but only if the cell still holds exactly what
+the script wrote (it keeps a small ledger, `data/<workbook>.state.json`). Anything you typed over is left alone. Futures are written once per
 row. Limitation: charts/images/pivots added to the sheet are dropped when openpyxl saves.
 
 ## Configuration — `config/config.json`
@@ -184,6 +189,7 @@ Run tests: `venv/bin/pip install -r requirements-dev.txt && venv/bin/python -m p
 | `No module named ...` | Should self-heal; if not: `venv/bin/python -m pip install -r requirements.txt` (Windows: `venv\\Scripts\\python.exe ...`) |
 | "No new data" | Market closed or already up to date (futures/RSI still refresh) |
 | Futures blank | Groww page changed or down; OHLC is still saved |
+| RSI / Close of a recent day looks wrong vs your chart | Run `./run.sh --refresh-recent` once (Windows: `venv\\Scripts\\python.exe -m scripts.main --refresh-recent`). Small differences vs TradingView can remain: it uses a different data feed, and Yahoo's final 5-min candle includes the official closing value |
 | RSI blank on old rows | Yahoo intraday history limit (~60 days; ~2 years for 60m) |
 
 Logs: `logs/nse_fetcher.log`. Provided as-is for personal and educational use; not financial advice.

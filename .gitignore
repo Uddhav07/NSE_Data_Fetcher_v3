@@ -26,3 +26,4 @@ logs/*.log
 
 # Installer output
 .pytest_cache/
+data/*.state.json
