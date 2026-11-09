@@ -1,7 +1,7 @@
 # NSE Data Fetcher — Project Brief
 
 One file that answers: **what must this project do, why was each decision made, what is the theme, and which strategic choices shaped it.**
-Other docs: `README.md` (how to use), `docs/ARCHITECTURE.md` (how it works inside), `CHANGELOG.md` (what changed when), `CLAUDE.md` (rules for editing).
+Other docs: `HANDOVER.md` (state of the project, file map, gotchas), `README.md` (how to use), `docs/ARCHITECTURE.md` (how it works inside), `CHANGELOG.md` (what changed when), `CLAUDE.md` (rules for editing).
 
 Legend: **[User]** = stated by the project owner · **[Eng]** = engineering reasoning added while building.
 

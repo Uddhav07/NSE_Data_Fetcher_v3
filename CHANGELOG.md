@@ -1,5 +1,8 @@
 # Changelog
 
+## 3.8.2
+- Added `HANDOVER.md`: chat summary, file/architecture map, rules, gotchas, release checklist, current state and open items for whoever takes over.
+
 ## 3.8.1
 - Added `PROJECT.md`: one file with the requirements, the reasoning behind each decision, the project theme and strategic choices, known limitations and the version history.
 
