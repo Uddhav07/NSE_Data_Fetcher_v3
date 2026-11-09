@@ -77,6 +77,9 @@ skipped on Tuesdays via `WEEKDAY($B2,2)<>2`. Duplicate dates are skipped, never 
 ## Table (v3.5)
 `_apply_table` (re)creates one Excel Table `NSE_Table` over A1:W<last row> after every update; headers are normalised to single-line text first. Row visibility (filters) cannot follow `insert_rows`, so filters are cleared when a day is inserted above existing rows.
 
+## Refresh ledger (v3.7)
+`update_workbook` records every OHLC/RSI value it newly writes in `<workbook>.state.json` (last 10 dates). `_refresh_recent` re-checks the latest 3 dated rows against fresh data and overwrites a cell only when it still equals the ledger value; `--refresh-recent N` forces N rows. Reason: Yahoo's final 5/15/30/60m candles and the daily close are revised after the session.
+
 ## Edit-safety contract (v3.2)
 Rows are only appended; N–W (and futures) are filled only into **empty** cells; headers are added only if missing; Tuesday fill only on new rows; conditional formats are added only if absent (our own RSI/Date Total rules are replaced on update so colour changes apply). Colours are always **cell-only**.
 

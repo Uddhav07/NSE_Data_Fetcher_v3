@@ -1,5 +1,8 @@
 # Changelog
 
+## 3.7.1
+- Housekeeping: version string, `CLAUDE.md` and `docs/ARCHITECTURE.md` brought in line with 3.7.0 (refresh ledger).
+
 ## 3.7.0
 ### Fixed
 - **Stale "final" values:** Yahoo revises its last intraday candles (and the day's close) after the session, but a value saved a little too early stayed frozen. The script now keeps a ledger of the OHLC/RSI values it wrote (`data/<workbook>.state.json`) and, for the latest 3 sessions, refreshes a cell to the final number **only if it still holds exactly what the script wrote** — your edits are never touched.
