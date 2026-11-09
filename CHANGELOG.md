@@ -1,5 +1,8 @@
 # Changelog
 
+## 3.5.1
+- Housekeeping: version string, `CLAUDE.md` and `docs/ARCHITECTURE.md` brought in line with 3.5.0 (Excel Table).
+
 ## 3.5.0
 ### Added
 - The sheet is now an Excel **Table** (`NSE_Table`, A1:V<last>) with filter buttons on every column; its range is refreshed on every run. Header names are single-line (no line breaks) as Excel tables require, and filter-button room was added to default column widths.
