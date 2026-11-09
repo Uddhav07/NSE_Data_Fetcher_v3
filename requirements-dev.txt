@@ -1,3 +1,2 @@
-# Build-time dependencies (not needed at runtime)
-pyinstaller>=6.0
-Pillow>=10.0     # Only for icon generation during build
+-r requirements.txt
+pytest>=7

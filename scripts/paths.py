@@ -1,35 +1,13 @@
-"""Centralized path resolution for both development and frozen (PyInstaller) modes."""
+"""Centralized path resolution."""
 
-import os
-import sys
+from __future__ import annotations
+
 from pathlib import Path
 
 
-def is_frozen() -> bool:
-    """True when running as a PyInstaller bundle."""
-    return getattr(sys, "frozen", False)
-
-
 def get_base_dir() -> Path:
-    """Return the root directory for writable data (config, data, logs, archive).
-
-    - Frozen: directory containing the .exe
-    - Dev: project root (parent of scripts/)
-    """
-    if is_frozen():
-        return Path(os.path.dirname(sys.executable))
+    """Project root (parent of scripts/)."""
     return Path(__file__).resolve().parent.parent
-
-
-def get_bundle_dir() -> Path:
-    """Return the directory where bundled read-only resources live.
-
-    - Frozen: PyInstaller's _MEIPASS temp folder
-    - Dev: same as base_dir (project root)
-    """
-    if is_frozen():
-        return Path(getattr(sys, "_MEIPASS", os.path.dirname(sys.executable)))
-    return get_base_dir()
 
 
 def get_config_path() -> Path:

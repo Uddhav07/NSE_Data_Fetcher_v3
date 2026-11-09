@@ -6,24 +6,27 @@ Usage (CLI):
     python -m scripts.main --start 2026-06-01
     python -m scripts.main --no-futures     # skip futures scraping
 
-Usage (GUI):
+Usage :
     python app.py                           # launch desktop GUI
 """
+
+from __future__ import annotations
 
 import argparse
 import logging
 import os
+import subprocess
 import sys
 from datetime import datetime, timedelta
 from logging.handlers import RotatingFileHandler
-from pathlib import Path
-from typing import Optional, Callable
+from typing import Optional
 
 from . import __version__
-from .paths import get_logs_dir, resolve_relative, ensure_dirs, get_base_dir
+from .paths import get_logs_dir, resolve_relative, ensure_dirs
 from .config_manager import AppConfig, load_config, save_default_config
 from .fetcher import fetch_ohlc_data
 from .futures import fetch_futures
+from .rsi import fetch_rsi
 from .excel_writer import (
     backup_workbook,
     create_workbook,
@@ -41,9 +44,9 @@ def _check_environment() -> list[str]:
     issues: list[str] = []
 
     # Python version
-    if sys.version_info < (3, 10):
+    if sys.version_info < (3, 9):
         issues.append(
-            f"Python 3.10+ required (found {sys.version_info.major}.{sys.version_info.minor})"
+            f"Python 3.9+ required (found {sys.version_info.major}.{sys.version_info.minor})"
         )
 
     # Required packages
@@ -134,6 +137,10 @@ def _parse_args() -> argparse.Namespace:
         help="Skip futures data scraping",
     )
     parser.add_argument(
+        "--no-rsi", action="store_true",
+        help="Skip intraday RSI columns (R-U)",
+    )
+    parser.add_argument(
         "--version", action="version", version=f"%(prog)s {__version__}",
     )
     return parser.parse_args()
@@ -163,6 +170,7 @@ def run_fetch(
     start_override: Optional[str] = None,
     full_refresh: bool = False,
     no_futures: bool = False,
+    no_rsi: bool = False,
     open_excel: Optional[bool] = None,
 ) -> FetchResult:
     """Execute the data-fetch pipeline. Returns a FetchResult.
@@ -232,6 +240,16 @@ def run_fetch(
 
     if data is None or data.empty:
         logger.info("No new data available. You're up to date!")
+        if os.path.exists(excel_path) and not (no_futures and no_rsi):
+            futures_price, futures_expiry = (None, None) if no_futures else fetch_futures(config)
+            rsi_map = {} if no_rsi else fetch_rsi(config)
+            try:
+                update_workbook(excel_path, _empty_ohlc(),
+                                futures_price=futures_price,
+                                futures_expiry=futures_expiry,
+                                rsi=rsi_map)
+            except PermissionError as exc:
+                return FetchResult(error=str(exc), excel_path=excel_path)
         logger.info("=" * 60)
         should_open = open_excel if open_excel is not None else config.open_excel_after_run
         if should_open and os.path.exists(excel_path):
@@ -243,12 +261,15 @@ def run_fetch(
     if not no_futures:
         futures_price, futures_expiry = fetch_futures(config)
 
+    rsi_map = {} if no_rsi else fetch_rsi(config)
+
     # Write to Excel
     try:
         added, skipped = update_workbook(
             excel_path, data,
             futures_price=futures_price,
             futures_expiry=futures_expiry,
+            rsi=rsi_map,
         )
     except PermissionError as exc:
         return FetchResult(
@@ -283,6 +304,7 @@ def run() -> None:
         start_override=args.start,
         full_refresh=args.full_refresh,
         no_futures=args.no_futures,
+        no_rsi=args.no_rsi,
     )
 
     if not result.ok:
@@ -290,10 +312,21 @@ def run() -> None:
         sys.exit(1)
 
 
+def _empty_ohlc():
+    import pandas as pd
+    return pd.DataFrame(columns=["Open", "High", "Low", "Close"])
+
+
 def _open_excel(path: str) -> None:
     """Open the Excel file in the default application."""
     try:
-        os.startfile(os.path.abspath(path))
+        target = os.path.abspath(path)
+        if sys.platform == "darwin":
+            subprocess.run(["open", target], check=True)
+        elif sys.platform.startswith("win"):
+            os.startfile(target)  # type: ignore[attr-defined]
+        else:
+            subprocess.run(["xdg-open", target], check=True)
         logger.info("Opened %s", path)
     except Exception as exc:
         logger.warning("Could not open Excel file: %s", exc)

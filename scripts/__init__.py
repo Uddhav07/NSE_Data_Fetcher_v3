@@ -1,3 +1,5 @@
-"""NSE Data Fetcher v3 - Modular Nifty 50 Data Fetcher with Technical Analysis."""
+"""NSE Data Fetcher v3 - Nifty 50 OHLC, futures, intraday RSI and Moon-nakshatra tracker (script edition)."""
 
-__version__ = "3.1.0"
+from __future__ import annotations
+
+__version__ = "3.2.0"

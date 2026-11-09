@@ -1,15 +1,16 @@
 """Configuration manager with validation and defaults."""
 
+from __future__ import annotations
+
 import json
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 import logging
 
-from .paths import get_config_path, get_base_dir
+from .paths import get_config_path
 
 logger = logging.getLogger(__name__)
 

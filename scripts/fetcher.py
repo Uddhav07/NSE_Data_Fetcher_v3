@@ -1,5 +1,7 @@
 """Yahoo Finance data fetcher with retry logic and validation."""
 
+from __future__ import annotations
+
 import logging
 import time
 from datetime import datetime, timedelta
