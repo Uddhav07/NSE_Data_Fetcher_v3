@@ -38,6 +38,13 @@ from .excel_writer import (
     update_workbook,
 )
 
+# Windows consoles may use a legacy code page: never crash on characters like "—"
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(errors="replace")
+    except Exception:
+        pass
+
 logger = logging.getLogger("nse_fetcher")
 
 

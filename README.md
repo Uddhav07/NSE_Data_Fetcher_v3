@@ -30,18 +30,45 @@ skipped (not final yet); just run again after close.
 (system Python, IDE interpreter...), the script creates `venv/` in the project, installs the packages, and
 re-runs itself inside it automatically.
 
-## Windows — step by step (PowerShell, copy & paste)
-Needs Python 3.9+ (tick **"Add python.exe to PATH"** in the installer) and Git. **You choose where the project lives:**
-in File Explorer open the folder you want (e.g. `D:\Trading`), click the address bar, type `powershell`, press Enter.
-Everything runs inside a project venv; the commands call `venv\Scripts\python.exe` directly, so no activation is needed.
-Shortcut: double-click `setup.bat` once, then `run.bat` each day (untested on a real Windows machine).
+## Windows (10 / 11) — complete guide
+Everything below is copy & paste. **You choose where the project lives** — nothing is hard-coded.
+The Windows launchers are untested on a real Windows PC; the Python code itself is cross-platform
+(the console is set to never crash on special characters, and Excel opens via `os.startfile`).
 
+### 1. Install Python 3.9 or newer (3.9–3.13)
+Download from <https://www.python.org/downloads/windows/> and **tick "Add python.exe to PATH"** on the first screen.
+Or, in PowerShell:
+```powershell
+winget install Python.Python.3.12
+```
+Close and reopen PowerShell, then check:
 ```powershell
 python --version
+```
+(If `python` opens the Microsoft Store, install from python.org or use `py -3 --version`.)
+
+### 2. Install Git — or skip it
+```powershell
+winget install Git.Git
+```
+No Git? On the GitHub page click **Code → Download ZIP**, extract it to the folder you want, and skip `git clone` below
+(updating later = download the ZIP again and copy over your `data\` and `config\` folders).
+
+### 3. Pick a folder and open PowerShell in it
+In File Explorer open the folder where you want the project (e.g. `D:\Trading`), click the address bar, type `powershell`, press Enter.
+
+### 4. Get the project
+```powershell
 git clone https://github.com/Uddhav07/NSE_Data_Fetcher_v3.git
 cd NSE_Data_Fetcher_v3
 ```
-One-time setup (venv + packages) and the first build from Jan 2026:
+
+### 5. One-time setup + first build from Jan 2026
+Easiest: double-click **`setup.bat`**, then in PowerShell:
+```powershell
+venv\Scripts\python.exe -m scripts.main --full-refresh --start 2026-01-01
+```
+Or do the setup by hand (same result):
 ```powershell
 python -m venv venv
 venv\Scripts\python.exe -m pip install --upgrade pip
@@ -49,23 +76,53 @@ venv\Scripts\python.exe -m pip install -r requirements.txt
 venv\Scripts\python.exe -m pip install -r requirements-optional.txt
 venv\Scripts\python.exe -m scripts.main --full-refresh --start 2026-01-01
 ```
-(`requirements-optional.txt` is only for the Moon Nakshatra column; if it fails to install everything else still works.)
+`requirements-optional.txt` is only for the Moon Nakshatra column; if it fails, everything else still works.
+The workbook is created at `data\stock_market_NSE50.xlsx` and opens in Excel on the latest date.
+You never need to "activate" the venv — and if a package is ever missing, the script installs it by itself.
 
-Every day after 15:35 IST, with the Excel file closed — open PowerShell **in the project folder** (same address-bar trick) and run:
+### 6. Every day (after 15:35 IST, Excel file closed)
+Either double-click **`run.bat`**, or open PowerShell/cmd in the project folder and run:
 ```powershell
 venv\Scripts\python.exe -m scripts.main
 ```
-Options: `--no-futures`, `--no-rsi`. Update the project: `git pull` then
-`venv\Scripts\python.exe -m pip install -r requirements.txt`.
+Options go on the end: `--no-futures`, `--no-rsi`, `--config PATH`. With the batch file: `run.bat --no-rsi`.
+A run adds missing days, fills empty cells, and never changes cells that already have values.
 
-Optional — activate the venv to type plain `python`:
+### 7. Update to a newer version
 ```powershell
-Set-ExecutionPolicy -Scope CurrentUser RemoteSigned   # only if activation is blocked
+git pull
+venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+### Optional: activate the venv (to type plain `python`)
+PowerShell:
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 venv\Scripts\Activate.ps1
 python -m scripts.main
 deactivate
 ```
-In Command Prompt (cmd) activate with `venv\Scripts\activate.bat`.
+Command Prompt (cmd): `venv\Scripts\activate.bat`
+
+### Optional: run automatically every weekday
+Replace `C:\Trading\NSE_Data_Fetcher_v3` with **your** project path; the time is your PC's local time (15:40 = after the IST close — convert if your PC is not on IST).
+```powershell
+schtasks /Create /TN "NSE Data Fetcher" /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 15:40 /TR "cmd /c cd /d C:\Trading\NSE_Data_Fetcher_v3 && venv\Scripts\python.exe -m scripts.main"
+```
+To stop it: `schtasks /Delete /TN "NSE Data Fetcher" /F`. Set `"open_excel_after_run": false` in `config\config.json` if you don't want Excel popping up.
+
+### Windows troubleshooting
+| Problem | Fix |
+|---|---|
+| `python` is not recognized / opens Microsoft Store | Reinstall from python.org with "Add python.exe to PATH", reopen PowerShell; or use `py -3` in place of `python` |
+| `Activate.ps1 cannot be loaded` (execution policy) | `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, or skip activation and use `venv\Scripts\python.exe` |
+| "Cannot save ... file is locked" | Close the workbook in Excel (check Task Manager for a hidden Excel), run again |
+| `No module named pandas` (or another package) | Should self-heal. Manually: `venv\Scripts\python.exe -m pip install -r requirements.txt` |
+| `pyswisseph` fails to install | Harmless — only the Nakshatra column stays blank. Python 3.9–3.13 have ready-made wheels |
+| SmartScreen / antivirus blocks `setup.bat` | It's a plain text script — right-click → Properties → Unblock, or run the PowerShell commands above |
+| `git` is not recognized | Reopen PowerShell after installing Git, or use the ZIP download |
+| Corporate proxy / SSL errors | Set `HTTPS_PROXY` in the terminal first: `$env:HTTPS_PROXY="http://proxy:port"` |
+| Excel shows `####` | Widen the column; values are fine |
 
 ## Options
 ```

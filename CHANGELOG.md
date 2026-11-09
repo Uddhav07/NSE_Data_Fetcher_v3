@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.3.1
+### Added
+- README: complete Windows guide (install Python/Git incl. `winget`, choose-your-folder, setup, daily use, update, venv activation, Task Scheduler, troubleshooting).
+- `.gitattributes` so `.bat` stays CRLF and `.sh`/`.command` stay LF on any OS.
+### Changed
+- Console output never crashes on legacy Windows code pages (unencodable characters are replaced).
+- `setup.bat` falls back to the `py -3` launcher and reports venv-creation failures.
+
 ## 3.3.0
 ### Added
 - **Self-healing dependencies** (`scripts/bootstrap.py`): a missing package (e.g. `No module named pandas`) is installed into the project `venv/` automatically and the run restarts there — works from system Python, IDEs, any interpreter.

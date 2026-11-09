@@ -1,18 +1,26 @@
 @echo off
 rem One-time setup for Windows: creates venv and installs packages. Double-click to run.
 cd /d "%~dp0"
+set "PY=python"
 python --version >nul 2>&1
+if errorlevel 1 set "PY=py -3"
+%PY% --version >nul 2>&1
 if errorlevel 1 (
   echo Python was not found. Install Python 3.9+ from https://www.python.org/downloads/windows/
   echo and tick "Add python.exe to PATH", then run this again.
   pause
   exit /b 1
 )
-python -m venv venv
+%PY% -m venv venv
+if errorlevel 1 (
+  echo Could not create the virtual environment.
+  pause
+  exit /b 1
+)
 venv\Scripts\python.exe -m pip install --quiet --upgrade pip
 venv\Scripts\python.exe -m pip install --quiet -r requirements.txt
 if errorlevel 1 (
-  echo Package install failed. See the messages above.
+  echo Package install failed. Check your internet connection and run again.
   pause
   exit /b 1
 )
