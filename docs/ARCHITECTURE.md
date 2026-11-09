@@ -71,6 +71,9 @@ skipped on Tuesdays via `WEEKDAY($B2,2)<>2`. Duplicate dates are skipped, never 
 5. **Locked-file handling** — PermissionError → friendly "close Excel" message.
 6. **Retry with exponential backoff** on both network sources.
 
+## Backfill & bootstrap (v3.3)
+`run_fetch` fetches from `min(start_date, last_date+1)`. `update_workbook` inserts missing dates in chronological order (`insert_rows`), re-points formulas whose first reference no longer matches their row (`_ensure_formulas`), and fills empty cells only. `bootstrap.ensure_dependencies()` runs before pandas is imported and, if needed, builds `venv/`, installs requirements and re-executes inside it. Rows/futures for today are skipped while the session is open (`market.session_in_progress`).
+
 ## Edit-safety contract (v3.2)
 Rows are only appended; Q–V (and futures M–O) are filled only into **empty** cells; headers are added only if missing; Tuesday fill only on new rows; conditional formats are added only if absent (our own RSI/Date Total rules are replaced on update so colour changes apply). Colours are always **cell-only**.
 

@@ -102,3 +102,45 @@ def test_nakshatra_and_cell_only_rules(tmp_path):
     n = len(ws.conditional_formatting)
     update_workbook(p, _df([]))                        # rerun: no duplicate rules
     assert len(load_workbook(p).active.conditional_formatting) == n
+
+
+def test_gap_backfill_inserts_in_order_and_keeps_edits(tmp_path):
+    p = str(tmp_path / "t.xlsx")
+    create_workbook(p)
+    d = ["2026-01-02", "2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08",
+         "2026-01-09", "2026-01-12", "2026-01-13"]
+    # first run: everything except 01-06 and 01-09 (gaps), and 01-02 is also missing
+    have = [x for x in d if x not in ("2026-01-06", "2026-01-09", "2026-01-02")]
+    update_workbook(p, _df(have))
+    wb = load_workbook(p); ws = wb.active
+    ws["P3"] = "my note on 01-07"          # user note on an existing row
+    ws["F3"] = 12345.0                     # user edited value on an existing row
+    wb.save(p)
+
+    # second run: full data incl. the missing dates (earlier, middle) -> backfill
+    full = _df(d)
+    added, skipped = update_workbook(p, full)
+    ws = load_workbook(p).active
+    dates = [ws.cell(r, 2).value.strftime("%Y-%m-%d") for r in range(2, ws.max_row + 1)]
+    assert dates == d and added == 3
+    # edits moved with their rows and were not overwritten
+    r = dates.index("2026-01-07") + 2
+    assert ws.cell(r, 16).value == "my note on 01-07" and ws.cell(r, 6).value == 12345.0
+    # every formula points at its own row (no stale references after insertion)
+    for row in range(2, ws.max_row + 1):
+        assert ws.cell(row, 1).value == f'=TEXT(B{row},"dddd")'
+        if row > 2:
+            assert ws.cell(row, 7).value == f"=F{row}-F{row - 1}"
+        if row > 6:
+            assert ws.cell(row, 8).value == f"=F{row}-F{row - 5}"
+    # idempotent: running again changes nothing
+    snap = [[c.value for c in row] for row in ws.iter_rows()]
+    assert update_workbook(p, full)[0] == 0
+    ws2 = load_workbook(p).active
+    assert snap == [[c.value for c in row] for row in ws2.iter_rows()]
+
+
+def test_bootstrap_detects_missing_and_ok():
+    from scripts import bootstrap
+    assert bootstrap._missing(("pandas", "definitely_not_a_pkg")) == ["definitely_not_a_pkg"]
+    assert bootstrap._missing(("os",)) == []

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -122,21 +123,19 @@ def _as_date(val):
 
 
 def _fill_derived_columns(ws, rsi: Optional[dict]) -> None:
-    """Fill Date Total + RSI cells that are EMPTY. Non-empty cells are never changed."""
+    """Fill Nakshatra + RSI cells that are EMPTY. Non-empty cells are never changed."""
     for row in range(2, ws.max_row + 1):
         dt = _as_date(ws.cell(row, 2).value)
         if dt is None:
             continue
         targets = []
-        c = ws.cell(row, _DATE_TOTAL_COL)
-        if c.value in (None, ""):
-            c.value = (f'=DAY(B{row})&", "&(1+MOD(YEAR(B{row})*10000+MONTH(B{row})*100+DAY(B{row})-1,9))')
-            targets.append(c)
         day_rsi = (rsi or {}).get(dt.strftime("%Y-%m-%d"), {})
         c = ws.cell(row, _NAKSHATRA_COL)
         if c.value in (None, ""):
-            c.value = moon_nakshatra(dt).strip()
-            targets.append(c)
+            nk = moon_nakshatra(dt).strip()
+            if nk:
+                c.value = nk
+                targets.append(c)
         for minutes, col in _RSI_COLS.items():
             c = ws.cell(row, col)
             if c.value in (None, "") and minutes in day_rsi:
@@ -290,6 +289,86 @@ def _add_conditional_formatting(ws) -> None:
     )
 
 
+_FIRST_REF = re.compile(r"[A-Z]{1,2}(\d+)")
+
+
+def _is_stale(value, row: int) -> bool:
+    """A formula whose first cell reference points at a different row (rows were shifted)."""
+    if not (isinstance(value, str) and value.startswith("=")):
+        return False
+    m = _FIRST_REF.search(value)
+    return bool(m) and int(m.group(1)) != row
+
+
+def _canonical(row: int, prev: Optional[int], ref5: Optional[int]) -> dict:
+    """Our formulas for one row: {column: formula}."""
+    f = {
+        1: f'=TEXT(B{row},"dddd")',
+        _DATE_TOTAL_COL: (f'=DAY(B{row})&", "&(1+MOD(YEAR(B{row})*10000+'
+                          f'MONTH(B{row})*100+DAY(B{row})-1,9))'),
+    }
+    if prev:
+        f[7] = f"=F{row}-F{prev}"
+        f[9] = f'=IF(F{row}>D{prev},"High","-")'
+        f[10] = f'=IF(F{row}<E{prev},"Low","-")'
+        f[11] = f'=IF(D{row}>D{prev},"Higher High","LH")'
+        f[12] = f'=IF(E{row}<E{prev},"L Low","Higher Low")'
+    if ref5:
+        f[8] = f"=F{row}-F{ref5}"
+    return f
+
+
+def _dated_rows(ws) -> list:
+    """[(date_str, row)] for every row with a real date in column B, in sheet order."""
+    out = []
+    for row in range(2, ws.max_row + 1):
+        dt = _as_date(ws.cell(row, 2).value)
+        if dt is not None:
+            out.append((dt.strftime("%Y-%m-%d"), row))
+    return out
+
+
+def _ensure_formulas(ws) -> None:
+    """Fill EMPTY formula cells and repair formulas shifted by row insertion.
+
+    A formula is only rewritten when it still points at its old row number
+    (i.e. the row moved). Formulas you edited in place are left alone.
+    """
+    dated = _dated_rows(ws)
+    for idx, (_, row) in enumerate(dated):
+        prev = dated[idx - 1][1] if idx >= 1 else None
+        ref5 = dated[idx - 5][1] if idx >= 5 else None
+        for col, formula in _canonical(row, prev, ref5).items():
+            cell = ws.cell(row, col)
+            if cell.value in (None, ""):
+                cell.value = formula
+                cell.alignment = _CENTER
+                if col in (7, 8):
+                    cell.number_format = "#,##0.00"
+            elif _is_stale(cell.value, row):
+                cell.value = formula
+        # futures difference (M) is ours too: repair only when shifted
+        m = ws.cell(row, 13)
+        if _is_stale(m.value, row):
+            m.value = f"=N{row}-F{row}"
+
+
+def _write_new_row(ws, row: int, date_idx, row_data) -> None:
+    """Write a freshly inserted row's values and styling (formulas come later)."""
+    ws.cell(row, 2, date_idx.to_pydatetime().replace(tzinfo=None))
+    ws.cell(row, 2).number_format = "YYYY-MM-DD"
+    ws.cell(row, 2).alignment = _CENTER
+    for off, field in enumerate(["Open", "High", "Low", "Close"]):
+        cell = ws.cell(row, 3 + off, round(float(row_data[field]), 2))
+        cell.number_format = "#,##0.00"
+        cell.alignment = _CENTER
+    for col in range(1, len(COLUMNS) + 1):
+        ws.cell(row, col).border = _THIN_BORDER
+    if date_idx.weekday() == 1:  # Tuesday highlight — only on rows we create
+        for col in range(1, len(COLUMNS) + 1):
+            ws.cell(row, col).fill = _TUESDAY_FILL
+
+
 def update_workbook(
     excel_path: str,
     data: pd.DataFrame,
@@ -297,13 +376,15 @@ def update_workbook(
     futures_expiry: Optional[str] = None,
     rsi: Optional[dict] = None,
 ) -> tuple[int, int]:
-    """Append new OHLC rows to the workbook, skipping duplicates.
+    """Bring the workbook up to date without touching what is already there.
 
-    Futures data is written to the most recent row (last added, or last
-    existing row if no new data was added). This ensures futures are
-    recorded even when running on weekends/holidays.
+    * Dates in ``data`` that are missing from the sheet are inserted in
+      chronological order (new days at the end, older gaps in the middle).
+    * Empty cells (OHLC, formulas, Date Total, RSI, Nakshatra, futures) are filled.
+    * Cells that already have a value — including your edits — are never changed.
+    * Formulas that move because a row was inserted are re-pointed.
 
-    Returns (added_count, skipped_count).
+    Returns (added_count, already_present_count).
     """
     try:
         wb = load_workbook(excel_path)
@@ -315,122 +396,64 @@ def update_workbook(
     ws = wb.active
     _ensure_headers(ws)
 
-    # Build date-to-row map for duplicate detection and weekly change lookup
-    date_row_map: dict[str, int] = {}
-    for row in range(2, ws.max_row + 1):
-        val = ws.cell(row, 2).value
-        if val:
-            if isinstance(val, datetime):
-                date_row_map[val.strftime("%Y-%m-%d")] = row
-            elif isinstance(val, str):
-                date_row_map[str(val)[:10]] = row
+    existing = dict(_dated_rows(ws))  # date_str -> row
+    added = skipped = 0
 
-    last_row = ws.max_row
-    added = 0
-    skipped = 0
-    latest_added_row: Optional[int] = None
-
+    # 1) existing dates: fill only EMPTY OHLC cells
     for date_idx, row_data in data.iterrows():
-        date_str = date_idx.strftime("%Y-%m-%d")
-
-        if date_str in date_row_map:
-            logger.debug("Skipping duplicate: %s", date_str)
+        ds = date_idx.strftime("%Y-%m-%d")
+        if ds in existing:
             skipped += 1
+            for off, field in enumerate(["Open", "High", "Low", "Close"]):
+                cell = ws.cell(existing[ds], 3 + off)
+                if cell.value in (None, ""):
+                    cell.value = round(float(row_data[field]), 2)
+                    cell.number_format = "#,##0.00"
+                    cell.alignment = _CENTER
+
+    # 2) missing dates: insert in order (oldest first)
+    for date_idx, row_data in data.sort_index().iterrows():
+        ds = date_idx.strftime("%Y-%m-%d")
+        if ds in existing:
             continue
-
-        last_row += 1
+        dated = _dated_rows(ws)
+        earlier = [r for d, r in dated if d < ds]
+        pos = (max(earlier) + 1) if earlier else 2
+        ws.insert_rows(pos)
+        _write_new_row(ws, pos, date_idx, row_data)
+        existing = dict(_dated_rows(ws))
         added += 1
-        latest_added_row = last_row
 
-        # A: Day formula (works because B stores a real datetime)
-        ws.cell(last_row, 1, f'=TEXT(B{last_row},"dddd")')
-        ws.cell(last_row, 1).alignment = _CENTER
+    # 3) formulas: fill empty ones, re-point shifted ones
+    _ensure_formulas(ws)
 
-        # B: Date — store as actual datetime so TEXT() and number_format work
-        ws.cell(last_row, 2, date_idx.to_pydatetime().replace(tzinfo=None))
-        ws.cell(last_row, 2).number_format = "YYYY-MM-DD"
-        ws.cell(last_row, 2).alignment = _CENTER
+    dated = _dated_rows(ws)
+    newest_row = max((r for _, r in dated), default=None)
 
-        # C–F: OHLC
-        for col_off, field in enumerate(["Open", "High", "Low", "Close"]):
-            cell = ws.cell(last_row, 3 + col_off, round(row_data[field], 2))
-            cell.number_format = "#,##0.00"
-            cell.alignment = _CENTER
+    # 4) futures — newest dated row, only into empty cells
+    if futures_price is not None and newest_row:
+        r = newest_row
+        if ws.cell(r, 14).value in (None, ""):
+            ws.cell(r, 14, futures_price)
+            ws.cell(r, 14).number_format = "#,##0.00"
+            ws.cell(r, 14).alignment = _CENTER
+            if futures_expiry and ws.cell(r, 15).value in (None, ""):
+                ws.cell(r, 15, futures_expiry)
+                ws.cell(r, 15).alignment = _CENTER
+            if ws.cell(r, 13).value in (None, ""):
+                ws.cell(r, 13, f"=N{r}-F{r}")
+                ws.cell(r, 13).number_format = "#,##0.00"
+                ws.cell(r, 13).alignment = _CENTER
+        else:
+            logger.info("Futures already present on row %d — left unchanged.", r)
 
-        # G: Daily Change = Close - prev Close (skip first data row to avoid #VALUE!)
-        if last_row > 2:
-            ws.cell(last_row, 7, f"=F{last_row}-F{last_row - 1}")
-            ws.cell(last_row, 7).number_format = "#,##0.00"
-            ws.cell(last_row, 7).alignment = _CENTER
-
-        # H: Weekly Change — exactly 5 trading days back (holiday-aware)
-        prior_dates = sorted(d for d in date_row_map if d < date_str)
-        if len(prior_dates) >= 5:
-            ref_date = prior_dates[-5]
-            ref_row = date_row_map[ref_date]
-            ws.cell(last_row, 8, f"=F{last_row}-F{ref_row}")
-            ws.cell(last_row, 8).number_format = "#,##0.00"
-            ws.cell(last_row, 8).alignment = _CENTER
-
-        # Track this row in date_row_map for subsequent weekly-change lookups
-        date_row_map[date_str] = last_row
-
-        # I–L: Technical analysis (needs previous row)
-        if last_row > 2:
-            prev = last_row - 1
-            # I: Close above previous High
-            ws.cell(last_row, 9, f'=IF(F{last_row}>D{prev},"High","-")')
-            ws.cell(last_row, 9).alignment = _CENTER
-            # J: Close below previous Low
-            ws.cell(last_row, 10, f'=IF(F{last_row}<E{prev},"Low","-")')
-            ws.cell(last_row, 10).alignment = _CENTER
-            # K: HH / HL
-            ws.cell(last_row, 11, f'=IF(D{last_row}>D{prev},"Higher High","LH")')
-            ws.cell(last_row, 11).alignment = _CENTER
-            # L: LL / LH
-            ws.cell(last_row, 12, f'=IF(E{last_row}<E{prev},"L Low","Higher Low")')
-            ws.cell(last_row, 12).alignment = _CENTER
-
-        # Thin bottom border for readability
-        for col in range(1, len(COLUMNS) + 1):
-            ws.cell(last_row, col).border = _THIN_BORDER
-
-        # Tuesday highlight — only on rows we create (never restyle user rows)
-        if date_idx.weekday() == 1:
-            for col in range(1, len(COLUMNS) + 1):
-                ws.cell(last_row, col).fill = _TUESDAY_FILL
-
-    # M–O: Futures — write on the most recent row (last added or last existing)
-    if futures_price is not None:
-        fut_row = latest_added_row or (max(date_row_map.values()) if date_row_map else 1)
-        if fut_row > 1:  # Skip if only header
-            if ws.cell(fut_row, 14).value in (None, ""):
-                ws.cell(fut_row, 14, futures_price)
-                ws.cell(fut_row, 14).number_format = "#,##0.00"
-                ws.cell(fut_row, 14).alignment = _CENTER
-                if futures_expiry and ws.cell(fut_row, 15).value in (None, ""):
-                    ws.cell(fut_row, 15, futures_expiry)
-                    ws.cell(fut_row, 15).alignment = _CENTER
-                if ws.cell(fut_row, 13).value in (None, ""):
-                    ws.cell(fut_row, 13, f"=N{fut_row}-F{fut_row}")
-                    ws.cell(fut_row, 13).number_format = "#,##0.00"
-                    ws.cell(fut_row, 13).alignment = _CENTER
-            else:
-                logger.info("Futures already present on row %d — left unchanged.", fut_row)
-            logger.debug("Futures written to row %d.", fut_row)
-
-    # Fill Date Total / RSI where blank (existing values are never overwritten)
+    # 5) Nakshatra / RSI — only into empty cells
     _fill_derived_columns(ws, rsi)
 
-    # Apply conditional formatting rules (clears old rules first)
     _add_conditional_formatting(ws)
-
-    # Ensure freeze panes
     ws.freeze_panes = "A2"
-
-    # Open the sheet scrolled to the latest date, with that row selected
-    if date_row_map:
-        _scroll_to_latest(ws, max(date_row_map.values()))
+    if newest_row:
+        _scroll_to_latest(ws, newest_row)
 
     try:
         wb.save(excel_path)
@@ -444,9 +467,6 @@ def update_workbook(
 
     if added:
         logger.info("Added %d new row(s) to %s.", added, excel_path)
-    if skipped:
-        logger.info("Skipped %d duplicate row(s).", skipped)
-    if not added and not skipped:
-        logger.info("No new rows to add.")
-
+    else:
+        logger.info("No new rows to add; empty cells were filled where data was available.")
     return added, skipped

@@ -6,6 +6,10 @@ formatting. See `docs/ARCHITECTURE.md` (how it works) and `docs/PLAN.md` (what w
 ## Scope
 - Script/CLI use only (macOS/Linux, Python 3.9+). No Windows GUI, `.bat`, PyInstaller, Inno Setup.
 
+## Environment
+- `scripts/bootstrap.py` auto-creates `venv/` and installs `requirements.txt` if packages are missing (never rely on a global Python). `pyswisseph` is optional (`requirements-optional.txt`).
+- Never hard-code a user folder in docs/code; the user chooses the project location.
+
 ## Run
 ```
 ./setup.sh && ./run.sh        # also: --full-refresh --start DATE, --no-futures, --no-rsi
@@ -20,7 +24,7 @@ Config: `config/config.json`. Logs: `logs/nse_fetcher.log`. Backups: `archive/`.
 - Futures are written only on the newest row; failure of futures must not block OHLC.
 - Excel layout (columns A–V, order, header colors) is a contract with the user's existing sheet — don't reorder.
 - Code is truth where README disagrees (weekly change = 5 trading rows back; Tuesday fill A–P).
-- Fill only EMPTY cells; never overwrite user values/formatting. Highlights are **cell-only**, never whole rows.
+- Runs re-check from start_date: insert missing dates in order, repair shifted formulas, fill empty cells. Fill only EMPTY cells; never overwrite user values/formatting. Highlights are **cell-only**, never whole rows.
 - Columns: Q Date Total, R–U RSI (5/15/30/45m at 15:30 IST), V Moon Nakshatra (09:15 IST).
 - Don't hit Yahoo/Groww in tests; mock `fetch_ohlc_data`/`fetch_futures`.
 - Confirm before deleting files or `--full-refresh` against the user's real workbook.

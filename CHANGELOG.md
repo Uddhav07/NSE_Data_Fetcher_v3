@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.3.0
+### Added
+- **Self-healing dependencies** (`scripts/bootstrap.py`): a missing package (e.g. `No module named pandas`) is installed into the project `venv/` automatically and the run restarts there — works from system Python, IDEs, any interpreter.
+- **Gap backfill:** every run checks from `start_date`, inserts any missing trading days in date order (formulas re-pointed), and fills empty cells. Cells that already have values are never changed.
+- `requirements-optional.txt` (`pyswisseph`): if it can't install, only the Nakshatra column is skipped instead of the whole run failing.
+### Changed
+- Before 15:35 IST on a trading day, today's row and futures are skipped (not final); run again after close.
+- README no longer assumes a folder — you choose where to put the project (and `excel_file` can be any path).
+
 ## 3.2.3
 ### Changed
 - README: full copy-paste Windows (PowerShell/cmd) instructions with venv support.

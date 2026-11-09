@@ -14,6 +14,7 @@ import pandas as pd
 import yfinance as yf
 
 from .config_manager import AppConfig
+from .market import session_in_progress, today_str
 
 logger = logging.getLogger(__name__)
 
@@ -95,9 +96,8 @@ def fetch_rsi(config: AppConfig) -> RsiMap:
         return {}
     result = compute_rsi_map(closes)
     # Don't record today's RSI until the session is over (candles still forming)
-    now_ist = pd.Timestamp.now(tz="Asia/Kolkata")
-    if now_ist.hour * 60 + now_ist.minute < 15 * 60 + 35:
-        if result.pop(now_ist.strftime("%Y-%m-%d"), None) is not None:
+    if session_in_progress():
+        if result.pop(today_str(), None) is not None:
             logger.info("Market still open — today's RSI skipped; re-run after 15:35 IST.")
     logger.info("RSI computed for %d trading day(s).", len(result))
     return result

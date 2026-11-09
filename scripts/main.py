@@ -1,13 +1,12 @@
 """Main entry point for NSE Data Fetcher v3.
 
 Usage (CLI):
-    python -m scripts.main                  # normal incremental update
+    python -m scripts.main                  # update: new days + any gaps/empty cells
     python -m scripts.main --full-refresh   # re-fetch from start_date
     python -m scripts.main --start 2026-06-01
     python -m scripts.main --no-futures     # skip futures scraping
+    python -m scripts.main --no-rsi         # skip intraday RSI
 
-Usage :
-    python app.py                           # launch desktop GUI
 """
 
 from __future__ import annotations
@@ -22,6 +21,11 @@ from logging.handlers import RotatingFileHandler
 from typing import Optional
 
 from . import __version__
+from .bootstrap import ensure_dependencies
+
+ensure_dependencies()  # installs/relaunches in the project venv if packages are missing
+
+from .market import session_in_progress, today_str  # noqa: E402
 from .paths import get_logs_dir, resolve_relative, ensure_dirs
 from .config_manager import AppConfig, load_config, save_default_config
 from .fetcher import fetch_ohlc_data
@@ -201,69 +205,62 @@ def run_fetch(
 
     excel_path = str(resolve_relative(config.excel_file))
 
-    # Determine start date
-    if full_refresh or not os.path.exists(excel_path):
-        if full_refresh and os.path.exists(excel_path):
-            logger.info("Full refresh requested — recreating workbook.")
-            backup_workbook(excel_path)
-            try:
-                os.remove(excel_path)
-            except PermissionError:
-                return FetchResult(
-                    error=f"Cannot delete '{excel_path}' — the file is locked. "
-                          "Please close it in Excel and try again.",
-                    excel_path=excel_path,
-                )
+    existed = os.path.exists(excel_path)
 
-        if not os.path.exists(excel_path):
-            logger.info("Excel file not found — creating new workbook.")
-            create_workbook(excel_path)
+    # Prepare workbook / decide how far back to fetch
+    if full_refresh and existed:
+        logger.info("Full refresh requested — recreating workbook.")
+        backup_workbook(excel_path)
+        existed = False
+        try:
+            os.remove(excel_path)
+        except PermissionError:
+            return FetchResult(
+                error=f"Cannot delete '{excel_path}' — the file is locked. "
+                      "Please close it in Excel and try again.",
+                excel_path=excel_path,
+            )
 
-        start = start_override or config.start_date
-        logger.info("Fetching historical data from %s...", start)
+    configured_start = start_override or config.start_date
+    if not os.path.exists(excel_path):
+        logger.info("Excel file not found — creating new workbook.")
+        create_workbook(excel_path)
+        start = configured_start
     else:
         last = get_last_date(excel_path)
         if last is None:
-            start = start_override or config.start_date
-            logger.info("Excel is empty. Fetching from %s...", start)
+            start = configured_start
         else:
-            start = (last + timedelta(days=1)).strftime("%Y-%m-%d")
-            logger.info("Last date in Excel: %s — fetching from %s...",
+            # Re-check everything from the configured start date so any missing
+            # days / empty cells are filled; filled cells are never overwritten.
+            day_after = (last + timedelta(days=1)).strftime("%Y-%m-%d")
+            start = min(configured_start, day_after)
+            logger.info("Last date in Excel: %s — checking from %s for gaps and new days.",
                         last.strftime("%Y-%m-%d"), start)
+    logger.info("Fetching data from %s...", start)
 
-    # Backup before update
-    if config.backup_before_update and os.path.exists(excel_path):
+    # Backup before update (only if there is something worth saving)
+    if config.backup_before_update and existed:
         backup_workbook(excel_path)
 
     # Fetch OHLC
     data = fetch_ohlc_data(config, start)
+    if data is None:
+        data = _empty_ohlc()
 
-    if data is None or data.empty:
-        logger.info("No new data available. You're up to date!")
-        if os.path.exists(excel_path) and not (no_futures and no_rsi):
-            futures_price, futures_expiry = (None, None) if no_futures else fetch_futures(config)
-            rsi_map = {} if no_rsi else fetch_rsi(config)
-            try:
-                update_workbook(excel_path, _empty_ohlc(),
-                                futures_price=futures_price,
-                                futures_expiry=futures_expiry,
-                                rsi=rsi_map)
-            except PermissionError as exc:
-                return FetchResult(error=str(exc), excel_path=excel_path)
-        logger.info("=" * 60)
-        should_open = open_excel if open_excel is not None else config.open_excel_after_run
-        if should_open and os.path.exists(excel_path):
-            _open_excel(excel_path)
-        return FetchResult(excel_path=excel_path)
+    # While the session is open, today's candle and futures price are not final.
+    live = session_in_progress()
+    if live:
+        today = today_str()
+        data = data[data.index.strftime("%Y-%m-%d") != today]
+        logger.info("Market session still open (before 15:35 IST) — today's row and futures "
+                    "are skipped. Run again after 15:35 IST.")
 
-    # Fetch futures
     futures_price, futures_expiry = None, None
-    if not no_futures:
+    if not no_futures and not live:
         futures_price, futures_expiry = fetch_futures(config)
-
     rsi_map = {} if no_rsi else fetch_rsi(config)
 
-    # Write to Excel
     try:
         added, skipped = update_workbook(
             excel_path, data,
@@ -272,13 +269,10 @@ def run_fetch(
             rsi=rsi_map,
         )
     except PermissionError as exc:
-        return FetchResult(
-            error=str(exc),
-            excel_path=excel_path,
-        )
+        return FetchResult(error=str(exc), excel_path=excel_path)
 
     logger.info("=" * 60)
-    logger.info("Update complete!  Added: %d  |  Skipped: %d", added, skipped)
+    logger.info("Update complete!  New rows: %d  |  Already in sheet: %d", added, skipped)
     logger.info("=" * 60)
 
     should_open = open_excel if open_excel is not None else config.open_excel_after_run

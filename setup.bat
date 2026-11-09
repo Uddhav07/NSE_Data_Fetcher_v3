@@ -16,6 +16,8 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
+venv\Scripts\python.exe -m pip install --quiet -r requirements-optional.txt
+if errorlevel 1 echo Note: optional package not installed - Moon Nakshatra column will stay blank.
 echo.
 echo Setup complete. Double-click run.bat to update the data.
 pause
