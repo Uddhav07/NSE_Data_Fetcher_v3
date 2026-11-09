@@ -153,6 +153,14 @@ def _parse_args() -> argparse.Namespace:
         help="Skip intraday RSI columns (R-U)",
     )
     parser.add_argument(
+        "--open", dest="open_excel", action="store_const", const=True, default=None,
+        help="Open the workbook in Excel after the run (default: config open_excel_after_run)",
+    )
+    parser.add_argument(
+        "--no-open", dest="open_excel", action="store_const", const=False,
+        help="Do not open the workbook after the run",
+    )
+    parser.add_argument(
         "--refresh-recent", nargs="?", const=3, type=int, default=0, metavar="N",
         help="Overwrite Open/High/Low/Close and RSI of the latest N rows (default 3) with fresh "
              "data, even if the script wrote them earlier. Use once to correct values saved "
@@ -316,6 +324,7 @@ def run() -> None:
         no_futures=args.no_futures,
         no_rsi=args.no_rsi,
         refresh_recent=args.refresh_recent,
+        open_excel=args.open_excel,
     )
 
     if not result.ok:

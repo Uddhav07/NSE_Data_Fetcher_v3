@@ -30,6 +30,15 @@ skipped (not final yet); just run again after close.
 (system Python, IDE interpreter...), the script creates `venv/` in the project, installs the packages, and
 re-runs itself inside it automatically.
 
+## The two scripts you need
+| | macOS / Linux | Windows | What it does |
+|---|---|---|---|
+| **1. Run** | `./run.sh` or double-click `run.command` | `run.bat` | Adds missing days, fills empty cells, refreshes the latest sessions, opens the workbook (if `open_excel_after_run` is true in the config — the default) |
+| **2. Update + run** | `./update_and_run.sh` or double-click `update_and_run.command` | `update_and_run.bat` | `git pull` to the latest version, refreshes packages, then does everything in (1) and **always** opens the workbook |
+
+The update step never overwrites your work: if you changed tracked project files, or you're offline / not a git clone, it says so, skips the update and still runs.
+Extra flags pass through, e.g. `./update_and_run.sh --no-futures` or `update_and_run.bat --no-open`. Use `--open` / `--no-open` on any run to force opening or not.
+
 ## Windows (10 / 11) — complete guide
 Everything below is copy & paste. **You choose where the project lives** — nothing is hard-coded.
 The Windows launchers are untested on a real Windows PC; the Python code itself is cross-platform
@@ -128,6 +137,7 @@ To stop it: `schtasks /Delete /TN "NSE Data Fetcher" /F`. Set `"open_excel_after
 ./run.sh --full-refresh --start DATE   rebuild (old file is backed up to archive/ first)
 ./run.sh --no-futures                  skip Groww futures
 ./run.sh --no-rsi                      skip intraday RSI
+./run.sh --open / --no-open            force opening (or not) the workbook after the run
 ./run.sh --refresh-recent              one-time fix: overwrite the latest 3 rows' prices/RSI with fresh data
                                         (use if a value was saved before the session was final; `--refresh-recent 5` for 5 rows)
 ./run.sh --config PATH                 use another config.json

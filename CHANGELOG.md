@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.8.0
+### Added
+- `update_and_run.sh` / `.command` / `.bat`: pull the latest version from GitHub (fast-forward only, skipped with a message if you have local changes, are offline, or it is not a git clone), refresh packages, run, and open the workbook.
+- `--open` / `--no-open` flags to force opening (or not) the workbook after a run, independent of the config.
+
 ## 3.7.1
 - Housekeeping: version string, `CLAUDE.md` and `docs/ARCHITECTURE.md` brought in line with 3.7.0 (refresh ledger).
 
