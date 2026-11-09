@@ -5,6 +5,7 @@ OHLC (Yahoo `^NSEI`), price-action formulas, the current Nifty futures price/exp
 (Groww), intraday RSI at the 15:30 close, and the Moon's nakshatra at 09:15 IST.
 
 Runs from the terminal on macOS/Linux (Python 3.9+). No GUI, no installer.
+Why things are the way they are (requirements, decisions, strategy): see [PROJECT.md](PROJECT.md).
 Rewritten from [v2.1](https://github.com/pmmittal-byte/NSE_Data_Fetcher_v2.1); v3.1 shipped a Windows app, which this edition drops.
 
 ## Quick start (macOS / Linux)

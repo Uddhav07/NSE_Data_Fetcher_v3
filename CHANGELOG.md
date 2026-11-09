@@ -1,5 +1,8 @@
 # Changelog
 
+## 3.8.1
+- Added `PROJECT.md`: one file with the requirements, the reasoning behind each decision, the project theme and strategic choices, known limitations and the version history.
+
 ## 3.8.0
 ### Added
 - `update_and_run.sh` / `.command` / `.bat`: pull the latest version from GitHub (fast-forward only, skipped with a message if you have local changes, are offline, or it is not a git clone), refresh packages, run, and open the workbook.

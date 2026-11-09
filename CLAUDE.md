@@ -1,7 +1,7 @@
 # NSE Data Fetcher v3 — project instructions
 
 **What it does:** appends Nifty 50 daily OHLC (Yahoo `^NSEI`), futures (Groww), intraday RSI at the 15:30 close and Moon nakshatra to `data/stock_market_NSE50.xlsx` with formula columns and
-formatting. See `docs/ARCHITECTURE.md` (how it works) and `docs/PLAN.md` (what we're doing).
+formatting. Read `PROJECT.md` first (requirements, decisions and why, theme, strategy). See `docs/ARCHITECTURE.md` (how it works) and `docs/PLAN.md` (what we're doing).
 
 ## Scope
 - Script/CLI use only (macOS/Linux, Python 3.9+). No Windows GUI, `.bat`, PyInstaller, Inno Setup.
