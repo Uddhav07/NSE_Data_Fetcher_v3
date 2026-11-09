@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.4.0
+### Changed
+- **Column order:** `Future as on Date`, `Future Expiry` and `Comments` now sit at the end (T, U, V). Order is now … M Diff in Future, N Date Total, O–R RSI, S Moon Nakshatra, T Future, U Expiry, V Comments. Existing workbooks are migrated automatically on the next run (backup first); values, formatting, notes and cell comments move with their columns, formulas and colour rules are re-pointed.
+### Fixed
+- **Moon Nakshatra blank on Windows:** it depended on the compiled `pyswisseph` package, which can fail to install. The Moon is now computed in pure Python (`moon_calc.py`) — no extra package, same result on every OS. Checked against Swiss Ephemeris over 3,650 days: max error 0.008°, zero nakshatra differences. `requirements-optional.txt` removed.
+
 ## 3.3.1
 ### Added
 - README: complete Windows guide (install Python/Git incl. `winget`, choose-your-folder, setup, daily use, update, venv activation, Task Scheduler, troubleshooting).

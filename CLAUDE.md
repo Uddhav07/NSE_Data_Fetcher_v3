@@ -7,7 +7,7 @@ formatting. See `docs/ARCHITECTURE.md` (how it works) and `docs/PLAN.md` (what w
 - Script/CLI use only (macOS/Linux, Python 3.9+). No Windows GUI, `.bat`, PyInstaller, Inno Setup.
 
 ## Environment
-- `scripts/bootstrap.py` auto-creates `venv/` and installs `requirements.txt` if packages are missing (never rely on a global Python). `pyswisseph` is optional (`requirements-optional.txt`).
+- `scripts/bootstrap.py` auto-creates `venv/` and installs `requirements.txt` if packages are missing (never rely on a global Python). No compiled/optional packages: the Moon is calculated in pure Python (`moon_calc.py`, validated against Swiss Ephemeris: <0.01°).
 - Never hard-code a user folder in docs/code; the user chooses the project location.
 
 ## Run
@@ -25,6 +25,6 @@ Config: `config/config.json`. Logs: `logs/nse_fetcher.log`. Backups: `archive/`.
 - Excel layout (columns A–V, order, header colors) is a contract with the user's existing sheet — don't reorder.
 - Code is truth where README disagrees (weekly change = 5 trading rows back; Tuesday fill A–P).
 - Runs re-check from start_date: insert missing dates in order, repair shifted formulas, fill empty cells. Fill only EMPTY cells; never overwrite user values/formatting. Highlights are **cell-only**, never whole rows.
-- Columns: Q Date Total, R–U RSI (5/15/30/45m at 15:30 IST), V Moon Nakshatra (09:15 IST).
+- Column order: M Diff in Future, N Date Total, O–R RSI (5/15/30/45m at 15:30 IST), S Moon Nakshatra (09:15 IST), T Future, U Expiry, V Comments (always last). Old layouts are migrated by `_migrate_layout`.
 - Don't hit Yahoo/Groww in tests; mock `fetch_ohlc_data`/`fetch_futures`.
 - Confirm before deleting files or `--full-refresh` against the user's real workbook.

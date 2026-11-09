@@ -36,7 +36,7 @@ The CLI (`run`) and the GUI both call it — **the GUI is not needed for our use
 | `scripts/futures.py` | GET `groww.in/futures/nifty`, parse `__NEXT_DATA__` → `contractData.livePrice.{ltp,symbol}`; expiry label from symbol `NIFTY25NOVFUT` → "NIFTY Nov 2025 Fut" |
 | `scripts/excel_writer.py` | workbook creation, row append, formulas, Tuesday fill, conditional formats |
 | `scripts/rsi.py` | 5/15/30m candles (period 60d) → Wilder RSI(14) → last value per date; 45m built from 15m; today skipped before 15:35 IST |
-| `scripts/nakshatra.py` | Moon sidereal longitude (pyswisseph, Lahiri) at 03:45 UT (09:15 IST) → one of 27 nakshatras |
+| `scripts/nakshatra.py` | Moon sidereal longitude (pure-Python Meeus series in `moon_calc.py` + Lahiri ayanamsa) at 03:45 UT (09:15 IST) → one of 27 nakshatras; verified against Swiss Ephemeris over 3,650 days (max 0.008°, 0 mismatches) |
 
 ## Excel layout (sheet `NSE_Data`, header row frozen)
 
@@ -51,13 +51,13 @@ The CLI (`run`) and the GUI both call it — **the GUI is not needed for our use
 | J | Close Below prev Low | `=IF(F_n<E_prev,"Low","-")` |
 | K | HH / HL | `=IF(D_n>D_prev,"Higher High","LH")` |
 | L | LL / LH | `=IF(E_n<E_prev,"L Low","Higher Low")` |
-| M | Diff in Future | `=N-F` (only on futures row) |
-| N | Future as on Date | scraped LTP (latest row only) |
-| O | Future Expiry | e.g. "NIFTY Nov 2025 Fut" |
-| P | Comments | user-owned |
-| Q | Date Total | `=DAY(B)&", "&(1+MOD(yyyymmdd-1,9))` |
-| R–U | RSI 5m/15m/30m/45m | static numbers at 15:30 IST close |
-| V | Moon Nakshatra | static text, left-aligned |
+| M | Diff in Future | `=T-F` (only on futures row) |
+| N | Date Total | `=DAY(B)&", "&(1+MOD(yyyymmdd-1,9))` |
+| O–R | RSI 5m/15m/30m/45m | static numbers at 15:30 IST close |
+| S | Moon Nakshatra | static text, left-aligned |
+| T | Future as on Date | scraped LTP (latest row only) |
+| U | Future Expiry | e.g. "NIFTY Nov 2026 Fut" |
+| V | Comments | user-owned, always the last column |
 
 Header colors: B–H blue `366092`, I–L gold `BF8F00`, others plain. Tuesday rows: whole
 row A–P filled (theme 9, tint 0.4). Conditional formats on G, H, M: green >0 / red <0,

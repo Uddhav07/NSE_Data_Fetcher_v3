@@ -10,7 +10,10 @@ from pathlib import Path
 from typing import Optional
 
 import pandas as pd
+from copy import copy
+
 from openpyxl import Workbook, load_workbook
+from openpyxl.comments import Comment
 from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
 
@@ -59,20 +62,24 @@ COLUMNS = [
     ("Close Below\nprev Low",       12.0,  "yellow"),  # J
     ("HH / HL",                     10.5,  "yellow"),  # K
     ("LL / LH",                     10.5,  "yellow"),  # L
-    ("Diff in\nFuture",              9.5,  "plain"),   # M
-    ("Future\nas on Date",          13.0,  "plain"),   # N
-    ("Future\nExpiry",              13.0,  "plain"),   # O
-    ("Comments",                    30.0,  "plain"),   # P — user notes (never overwritten)
-    ("Date\nTotal",                  10.0,  "plain"),   # Q — "day, digit-root of full date"
-    ("RSI\n5m",                       8.0,  "plain"),   # R
-    ("RSI\n15m",                      8.0,  "plain"),   # S
-    ("RSI\n30m",                      8.0,  "plain"),   # T
-    ("RSI\n45m",                      8.0,  "plain"),   # U
-    ("Moon Nakshatra\n(9:15am)",     18.0,  "plain"),   # V
+    ("Diff in\nFuture",              9.5,  "plain"),   # M  (= T - Close)
+    ("Date\nTotal",                  10.0,  "plain"),   # N  "day, digit-root of full date"
+    ("RSI\n5m",                       8.0,  "plain"),   # O
+    ("RSI\n15m",                      8.0,  "plain"),   # P
+    ("RSI\n30m",                      8.0,  "plain"),   # Q
+    ("RSI\n45m",                      8.0,  "plain"),   # R
+    ("Moon Nakshatra\n(9:15am)",     18.0,  "plain"),   # S
+    ("Future\nas on Date",          13.0,  "plain"),   # T
+    ("Future\nExpiry",              13.0,  "plain"),   # U
+    ("Comments",                    30.0,  "plain"),   # V — user notes (never overwritten)
 ]
-_NAKSHATRA_COL = 22
-_RSI_COLS = {5: 18, 15: 19, 30: 20, 45: 21}   # minutes -> column index
-_DATE_TOTAL_COL = 17
+_DATE_TOTAL_COL = 14
+_RSI_COLS = {5: 15, 15: 16, 30: 17, 45: 18}   # minutes -> column index
+_NAKSHATRA_COL = 19
+_DIFF_COL = 13
+_FUT_COL = 20
+_EXP_COL = 21
+_COMMENTS_COL = 22
 
 
 def _apply_header_style(ws) -> None:
@@ -109,6 +116,41 @@ def _ensure_headers(ws) -> None:
             letter = get_column_letter(col_idx)
             if ws.column_dimensions[letter].width in (None, 13.0) or letter not in ws.column_dimensions:
                 ws.column_dimensions[letter].width = width
+
+
+# Old layout (<= v3.2): N Future, O Expiry, P Comments, Q Date Total, R-U RSI, V Nakshatra.
+# New layout: N Date Total, O-R RSI, S Nakshatra, T Future, U Expiry, V Comments.
+_OLD_TO_NEW = {14: 20, 15: 21, 16: 22, 17: 14, 18: 15, 19: 16, 20: 17, 21: 18, 22: 19}
+
+
+def _migrate_layout(ws) -> bool:
+    """Move columns N:V from the old order to the new one, keeping every value,
+    cell style, cell comment and your Comments notes. Returns True if it migrated."""
+    if not str(ws.cell(1, 16).value or "").strip().startswith("Comments"):
+        return False
+    snap = {}
+    for r in range(1, ws.max_row + 1):
+        for old in _OLD_TO_NEW:
+            c = ws.cell(r, old)
+            cm = c.comment
+            snap[(r, old)] = (c.value, copy(c._style),
+                              (cm.text, cm.author, cm.width, cm.height) if cm else None)
+            c.comment = None
+    for (r, old), (value, style, cm) in snap.items():
+        tgt = ws.cell(r, _OLD_TO_NEW[old])
+        tgt.value = value
+        tgt._style = style
+        if cm:
+            tgt.comment = Comment(cm[0], cm[1], height=cm[3], width=cm[2])
+    for r in range(2, ws.max_row + 1):  # "Diff in Future" now points at column T
+        m = ws.cell(r, _DIFF_COL)
+        if isinstance(m.value, str):
+            m.value = re.sub(r"^=N(\d+)-F(\d+)$", r"=T\1-F\2", m.value)
+    for col, (_, width, _g) in enumerate(COLUMNS, start=1):
+        if col >= 13:
+            ws.column_dimensions[get_column_letter(col)].width = width
+    logger.info("Column layout updated: Future / Expiry / Comments moved to the end.")
+    return True
 
 
 def _as_date(val):
@@ -227,7 +269,11 @@ def _add_conditional_formatting(ws) -> None:
              ("R2:U1048576", "AND(ISNUMBER(R2),R2<30)"),
              ("R2:U1048576", "AND(ISNUMBER(R2),R2>=80)"),
              ("R2:U1048576", "AND(ISNUMBER(R2),R2>=70,R2<80)"),
-             ("Q2:Q1048576", 'OR(Q2="3, 6",Q2="6, 3")')}
+             ("Q2:Q1048576", 'OR(Q2="3, 6",Q2="6, 3")'),
+             ("O2:R1048576", "AND(ISNUMBER(O2),O2<30)"),
+             ("O2:R1048576", "AND(ISNUMBER(O2),O2>=80)"),
+             ("O2:R1048576", "AND(ISNUMBER(O2),O2>=70,O2<80)"),
+             ("N2:N1048576", 'OR(N2="3, 6",N2="6, 3")')}
     for cf in list(ws.conditional_formatting):
         cf.rules = [r for r in cf.rules
                     if (str(cf.sqref), (r.formula or [""])[0]) not in _ours]
@@ -250,14 +296,14 @@ def _add_conditional_formatting(ws) -> None:
     guard = _Guard
 
     # RSI (R:U) — cell-only colours; <30 red, 70-79.99 light green, 80+ dark green (mutually exclusive)
-    guard.add("R2:U1048576", FormulaRule(formula=["AND(ISNUMBER(R2),R2<30)"],
+    guard.add("O2:R1048576", FormulaRule(formula=["AND(ISNUMBER(O2),O2<30)"],
               fill=_RSI30_FILL, font=_RSI30_FONT))
-    guard.add("R2:U1048576", FormulaRule(formula=["AND(ISNUMBER(R2),R2>=80)"],
+    guard.add("O2:R1048576", FormulaRule(formula=["AND(ISNUMBER(O2),O2>=80)"],
               fill=_RSI80_FILL, font=_RSI80_FONT))
-    guard.add("R2:U1048576", FormulaRule(formula=["AND(ISNUMBER(R2),R2>=70,R2<80)"],
+    guard.add("O2:R1048576", FormulaRule(formula=["AND(ISNUMBER(O2),O2>=70,O2<80)"],
               fill=_RSI70_FILL, font=_RSI70_FONT))
     # Date Total (Q) — only the cell, for "3, 6" and "6, 3"
-    guard.add("Q2:Q1048576", FormulaRule(formula=['OR(Q2="3, 6",Q2="6, 3")'],
+    guard.add("N2:N1048576", FormulaRule(formula=['OR(N2="3, 6",N2="6, 3")'],
               fill=_TOTAL_FILL, font=_TOTAL_FONT))
 
     # Daily Change (G) — green if > 0, red if < 0 (skip Tuesdays)
@@ -348,9 +394,9 @@ def _ensure_formulas(ws) -> None:
             elif _is_stale(cell.value, row):
                 cell.value = formula
         # futures difference (M) is ours too: repair only when shifted
-        m = ws.cell(row, 13)
+        m = ws.cell(row, _DIFF_COL)
         if _is_stale(m.value, row):
-            m.value = f"=N{row}-F{row}"
+            m.value = f"=T{row}-F{row}"
 
 
 def _write_new_row(ws, row: int, date_idx, row_data) -> None:
@@ -394,6 +440,7 @@ def update_workbook(
         logger.error(msg)
         raise PermissionError(msg)
     ws = wb.active
+    _migrate_layout(ws)
     _ensure_headers(ws)
 
     existing = dict(_dated_rows(ws))  # date_str -> row
@@ -433,17 +480,17 @@ def update_workbook(
     # 4) futures — newest dated row, only into empty cells
     if futures_price is not None and newest_row:
         r = newest_row
-        if ws.cell(r, 14).value in (None, ""):
-            ws.cell(r, 14, futures_price)
-            ws.cell(r, 14).number_format = "#,##0.00"
-            ws.cell(r, 14).alignment = _CENTER
-            if futures_expiry and ws.cell(r, 15).value in (None, ""):
-                ws.cell(r, 15, futures_expiry)
-                ws.cell(r, 15).alignment = _CENTER
-            if ws.cell(r, 13).value in (None, ""):
-                ws.cell(r, 13, f"=N{r}-F{r}")
-                ws.cell(r, 13).number_format = "#,##0.00"
-                ws.cell(r, 13).alignment = _CENTER
+        if ws.cell(r, _FUT_COL).value in (None, ""):
+            ws.cell(r, _FUT_COL, futures_price)
+            ws.cell(r, _FUT_COL).number_format = "#,##0.00"
+            ws.cell(r, _FUT_COL).alignment = _CENTER
+            if futures_expiry and ws.cell(r, _EXP_COL).value in (None, ""):
+                ws.cell(r, _EXP_COL, futures_expiry)
+                ws.cell(r, _EXP_COL).alignment = _CENTER
+            if ws.cell(r, _DIFF_COL).value in (None, ""):
+                ws.cell(r, _DIFF_COL, f"=T{r}-F{r}")
+                ws.cell(r, _DIFF_COL).number_format = "#,##0.00"
+                ws.cell(r, _DIFF_COL).alignment = _CENTER
         else:
             logger.info("Futures already present on row %d — left unchanged.", r)
 

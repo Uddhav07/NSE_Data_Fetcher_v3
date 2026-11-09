@@ -73,10 +73,8 @@ Or do the setup by hand (same result):
 python -m venv venv
 venv\Scripts\python.exe -m pip install --upgrade pip
 venv\Scripts\python.exe -m pip install -r requirements.txt
-venv\Scripts\python.exe -m pip install -r requirements-optional.txt
 venv\Scripts\python.exe -m scripts.main --full-refresh --start 2026-01-01
 ```
-`requirements-optional.txt` is only for the Moon Nakshatra column; if it fails, everything else still works.
 The workbook is created at `data\stock_market_NSE50.xlsx` and opens in Excel on the latest date.
 You never need to "activate" the venv — and if a package is ever missing, the script installs it by itself.
 
@@ -118,7 +116,7 @@ To stop it: `schtasks /Delete /TN "NSE Data Fetcher" /F`. Set `"open_excel_after
 | `Activate.ps1 cannot be loaded` (execution policy) | `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, or skip activation and use `venv\Scripts\python.exe` |
 | "Cannot save ... file is locked" | Close the workbook in Excel (check Task Manager for a hidden Excel), run again |
 | `No module named pandas` (or another package) | Should self-heal. Manually: `venv\Scripts\python.exe -m pip install -r requirements.txt` |
-| `pyswisseph` fails to install | Harmless — only the Nakshatra column stays blank. Python 3.9–3.13 have ready-made wheels |
+| Moon Nakshatra column blank | Update to the latest version (`git pull`) — it is now calculated in pure Python, no extra package needed. Run `venv\Scripts\python.exe -m scripts.main` again; empty cells are filled |
 | SmartScreen / antivirus blocks `setup.bat` | It's a plain text script — right-click → Properties → Unblock, or run the PowerShell commands above |
 | `git` is not recognized | Reopen PowerShell after installing Git, or use the ZIP download |
 | Corporate proxy / SSL errors | Set `HTTPS_PROXY` in the terminal first: `$env:HTTPS_PROXY="http://proxy:port"` |
@@ -140,11 +138,14 @@ To stop it: `schtasks /Delete /TN "NSE Data Fetcher" /F`. Set `"open_excel_after
 | C–F | Open, High, Low, Close |
 | G–H | Daily change; Weekly change (vs 5 trading days back, holiday-aware) |
 | I–L | Close above prev High / below prev Low, HH-HL, LL-LH (formulas) |
-| M–O | Futures diff, futures price, expiry (newest row only) |
-| P | **Comments** — yours, never written by the script |
-| Q | **Date Total** — `day, digit-root of full date`; 2026-11-09 → `9, 3` |
-| R–U | **RSI(14)** on 5/15/30/45-min candles, as of the 15:30 IST close |
-| V | **Moon Nakshatra** at 09:15 IST (sidereal, Lahiri), left-aligned |
+| M | Diff in Future (`=T − Close`) |
+| N | **Date Total** — `day, digit-root of full date`; 2026-11-09 → `9, 3` |
+| O–R | **RSI(14)** on 5/15/30/45-min candles, as of the 15:30 IST close |
+| S | **Moon Nakshatra** at 09:15 IST (sidereal, Lahiri), left-aligned |
+| T–U | **Future as on Date**, **Future Expiry** (newest row only) |
+| V | **Comments** — yours, never written by the script |
+
+**Updating from an older version?** Your existing workbook is migrated automatically on the next run (a backup goes to `archive/` first): Future, Expiry and Comments move to the end, and your notes, values and formatting travel with them.
 
 Cell-only colours: RSI below 30 red, RSI 70–79.99 light green, RSI 80+ dark green, Date Total `3, 6` / `6, 3` purple.
 Daily/weekly/futures change columns go green/red. Tuesday rows get a light-blue row fill when created.
@@ -165,7 +166,7 @@ row. Limitation: charts/images/pivots added to the sheet are dropped when openpy
 ```
 setup.sh/run.sh (+ .command wrappers) · setup.bat/run.bat (Windows)
 scripts/  main.py (CLI+orchestration) · fetcher.py (Yahoo OHLC) · futures.py (Groww)
-          rsi.py (intraday RSI) · nakshatra.py (Moon) · excel_writer.py · config_manager.py · paths.py
+          rsi.py (intraday RSI) · nakshatra.py + moon_calc.py (Moon, pure Python) · excel_writer.py · config_manager.py · paths.py
           bootstrap.py (auto-install deps) · market.py (session hours)
 config/   config.json        tests/  test_core.py (pytest, no network)
 data/ archive/ logs/         generated at runtime (git-ignored)

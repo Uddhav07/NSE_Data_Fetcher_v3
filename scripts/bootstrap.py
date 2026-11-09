@@ -3,7 +3,7 @@
 If a required package is missing from the interpreter that started the script
 (system Python, an IDE's interpreter, a different venv...), this module:
   1. creates the project venv (<project>/venv) if it doesn't exist,
-  2. installs requirements.txt into it (and tries requirements-optional.txt),
+  2. installs requirements.txt into it,
   3. re-runs the same command inside that venv.
 Uses the standard library only, so it can run before anything else is imported.
 """
@@ -70,10 +70,6 @@ def ensure_dependencies() -> None:
         if _run(base + ["-r", ROOT / "requirements.txt"]) != 0:
             print("[setup] Package install failed. Check your internet connection and run again.")
             sys.exit(1)
-        opt = ROOT / "requirements-optional.txt"
-        if opt.exists() and _run(base + ["-r", opt]) != 0:
-            print("[setup] Optional package(s) not installed (Moon Nakshatra column will stay "
-                  "blank). Everything else works.")
 
     env = dict(os.environ, **{_ENV_FLAG: "1"})
     rc = subprocess.call([str(py), "-m", "scripts.main", *sys.argv[1:]], cwd=str(ROOT), env=env)
