@@ -15,6 +15,18 @@ cd NSE_Data_Fetcher_v3
 ./run.sh --full-refresh --start 2026-01-01    # one-time: build the sheet from Jan 2026
 ./run.sh                                      # every day after 15:35 IST
 ```
+**macOS double-click:** use `setup.command` / `run.command` in Finder (a `.sh` file opens in an editor instead of running). If macOS blocks it the first time: right-click → Open.
+
+**Windows (Python 3.9+, tick "Add to PATH" when installing):** double-click `setup.bat` once, then `run.bat`
+(or `run.bat --full-refresh --start 2026-01-01` from a terminal for the first build). Equivalent manual commands:
+```bat
+python -m venv venv
+venv\Scripts\python.exe -m pip install -r requirements.txt
+venv\Scripts\python.exe -m scripts.main --full-refresh --start 2026-01-01
+venv\Scripts\python.exe -m scripts.main
+```
+The Windows scripts are untested on a real Windows machine; the Python code is cross-platform and opens Excel via `os.startfile`.
+
 Close the workbook in Excel before running (a locked file gives a friendly error).
 The sheet opens scrolled to the latest date.
 
@@ -57,6 +69,7 @@ row. Limitation: charts/images/pivots added to the sheet are dropped when openpy
 
 ## Project layout
 ```
+setup.sh/run.sh (+ .command wrappers) · setup.bat/run.bat (Windows)
 scripts/  main.py (CLI+orchestration) · fetcher.py (Yahoo OHLC) · futures.py (Groww)
           rsi.py (intraday RSI) · nakshatra.py (Moon) · excel_writer.py · config_manager.py · paths.py
 config/   config.json        tests/  test_core.py (pytest, no network)

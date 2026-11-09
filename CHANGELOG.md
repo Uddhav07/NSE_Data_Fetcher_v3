@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.2.2
+### Added
+- `setup.bat` / `run.bat` for Windows (double-click; untested on real Windows).
+- `setup.command` and `run.command`: double-click in Finder to run setup / update in Terminal (a `.sh` opens in an editor).
+
 ## 3.2.1
 ### Changed
 - RSI colours (cell-only): below 30 red, 70–79.99 light green, 80+ dark green (previously orange / red).
