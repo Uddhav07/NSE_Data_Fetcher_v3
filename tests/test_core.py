@@ -97,7 +97,7 @@ def test_nakshatra_and_cell_only_rules(tmp_path):
     ws = load_workbook(p).active
     assert ws["V1"].value.startswith("Moon") and ws["V2"].value and ws["V3"].value
     rules = {str(cf.sqref): [r.formula for r in cf.rules] for cf in ws.conditional_formatting}
-    assert rules["R2:U1048576"] == [["AND(ISNUMBER(R2),R2>=80)"], ["AND(ISNUMBER(R2),R2>=70,R2<80)"]]
+    assert rules["R2:U1048576"] == [["AND(ISNUMBER(R2),R2<30)"], ["AND(ISNUMBER(R2),R2>=80)"], ["AND(ISNUMBER(R2),R2>=70,R2<80)"]]
     assert rules["Q2:Q1048576"] == [['OR(Q2="3, 6",Q2="6, 3")']]
     n = len(ws.conditional_formatting)
     update_workbook(p, _df([]))                        # rerun: no duplicate rules

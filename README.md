@@ -40,7 +40,7 @@ The sheet opens scrolled to the latest date.
 | R–U | **RSI(14)** on 5/15/30/45-min candles, as of the 15:30 IST close |
 | V | **Moon Nakshatra** at 09:15 IST (sidereal, Lahiri), left-aligned |
 
-Cell-only colours: RSI 70–79.99 orange, RSI 80+ bright red, Date Total `3, 6` / `6, 3` purple.
+Cell-only colours: RSI below 30 red, RSI 70–79.99 light green, RSI 80+ dark green, Date Total `3, 6` / `6, 3` purple.
 Daily/weekly/futures change columns go green/red. Tuesday rows get a light-blue row fill when created.
 
 Notes on the intraday data: Yahoo keeps only ~60 days of 5/15/30-min history, so older rows have

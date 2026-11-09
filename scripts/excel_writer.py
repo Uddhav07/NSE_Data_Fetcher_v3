@@ -28,10 +28,12 @@ _GREEN_FONT = Font(color="006100")
 _RED_FONT = Font(color="9C0006")
 _GREEN_FILL = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
 _RED_FILL = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
-_RSI70_FILL = PatternFill(start_color="FFC000", end_color="FFC000", fill_type="solid")   # orange
-_RSI70_FONT = Font(color="000000", bold=True)
-_RSI80_FILL = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")   # bright red
+_RSI70_FILL = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")   # light green
+_RSI70_FONT = Font(color="006100", bold=True)
+_RSI80_FILL = PatternFill(start_color="00682F", end_color="00682F", fill_type="solid")   # dark green
 _RSI80_FONT = Font(color="FFFFFF", bold=True)
+_RSI30_FILL = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")   # red
+_RSI30_FONT = Font(color="FFFFFF", bold=True)
 _TOTAL_FILL = PatternFill(start_color="D9B3FF", end_color="D9B3FF", fill_type="solid")   # purple
 _TOTAL_FONT = Font(color="4B0082", bold=True)
 _THIN_BORDER = Border(
@@ -223,6 +225,7 @@ def _add_conditional_formatting(ws) -> None:
 
     # Drop our own previous RSI / Date Total rules so colour changes apply
     _ours = {("R2:U1048576", "80"), ("R2:U1048576", "70"),
+             ("R2:U1048576", "AND(ISNUMBER(R2),R2<30)"),
              ("R2:U1048576", "AND(ISNUMBER(R2),R2>=80)"),
              ("R2:U1048576", "AND(ISNUMBER(R2),R2>=70,R2<80)"),
              ("Q2:Q1048576", 'OR(Q2="3, 6",Q2="6, 3")')}
@@ -247,7 +250,9 @@ def _add_conditional_formatting(ws) -> None:
 
     guard = _Guard
 
-    # RSI (R:U) — cell-only colours; 70-79.99 orange, 80+ red (mutually exclusive)
+    # RSI (R:U) — cell-only colours; <30 red, 70-79.99 light green, 80+ dark green (mutually exclusive)
+    guard.add("R2:U1048576", FormulaRule(formula=["AND(ISNUMBER(R2),R2<30)"],
+              fill=_RSI30_FILL, font=_RSI30_FONT))
     guard.add("R2:U1048576", FormulaRule(formula=["AND(ISNUMBER(R2),R2>=80)"],
               fill=_RSI80_FILL, font=_RSI80_FONT))
     guard.add("R2:U1048576", FormulaRule(formula=["AND(ISNUMBER(R2),R2>=70,R2<80)"],

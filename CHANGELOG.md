@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.2.1
+### Changed
+- RSI colours (cell-only): below 30 red, 70–79.99 light green, 80+ dark green (previously orange / red).
+
 ## 3.2.0 — Script edition (macOS/Linux)
 ### Added
 - Column Q **Date Total** (`9, 3` style), R–U **RSI(14)** for 5/15/30/45-min candles at the 15:30 IST close, V **Moon Nakshatra** at 09:15 IST.
