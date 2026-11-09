@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.6.0
+### Added
+- **RSI 60m** column (S), 14-period RSI on 60-minute candles at the 15:30 IST close. Yahoo keeps ~2 years of hourly data, so it fills back much further than the 5/15/30/45m columns.
+### Changed
+- New column order: … O–S RSI 5/15/30/45/60m, T Moon Nakshatra, U Future as on Date, V Future Expiry, W Comments. Sheets in any older layout migrate automatically (backup first); values, formatting, notes and cell comments move with their columns; colour rules, formulas and the table range are re-pointed.
+
 ## 3.5.1
 - Housekeeping: version string, `CLAUDE.md` and `docs/ARCHITECTURE.md` brought in line with 3.5.0 (Excel Table).
 

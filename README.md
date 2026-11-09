@@ -140,21 +140,21 @@ To stop it: `schtasks /Delete /TN "NSE Data Fetcher" /F`. Set `"open_excel_after
 | I–L | Close above prev High / below prev Low, HH-HL, LL-LH (formulas) |
 | M | Diff in Future (`=T − Close`) |
 | N | **Date Total** — `day, digit-root of full date`; 2026-11-09 → `9, 3` |
-| O–R | **RSI(14)** on 5/15/30/45-min candles, as of the 15:30 IST close |
-| S | **Moon Nakshatra** at 09:15 IST (sidereal, Lahiri), left-aligned |
-| T–U | **Future as on Date**, **Future Expiry** (newest row only) |
-| V | **Comments** — yours, never written by the script |
+| O–S | **RSI(14)** on 5/15/30/45/60-min candles, as of the 15:30 IST close |
+| T | **Moon Nakshatra** at 09:15 IST (sidereal, Lahiri), left-aligned |
+| U–V | **Future as on Date**, **Future Expiry** (newest row only) |
+| W | **Comments** — yours, never written by the script |
 
 **Filtering:** the data is formatted as an Excel Table (`NSE_Table`), so every column has filter buttons — e.g. filter RSI ≥ 70, Date Total `3, 6`, or one Nakshatra. The table grows by itself as rows are added.
 Use **filters only — don't sort** the table: Daily/Weekly change and the High/Low formulas compare with the row above, so sorting would scramble them (and the script expects dates in order). To analyse in another order, copy the data to a new sheet first. If a missing day is ever inserted in the middle of the sheet, active filters are cleared and you re-apply them.
 
-**Updating from an older version?** Your existing workbook is migrated automatically on the next run (a backup goes to `archive/` first): Future, Expiry and Comments move to the end, and your notes, values and formatting travel with them.
+**Updating from an older version?** Your existing workbook is migrated automatically on the next run (a backup goes to `archive/` first): columns shift into the new order (Future, Expiry and Comments stay at the end), and your notes, values and formatting travel with them.
 
 Cell-only colours: RSI below 30 red, RSI 70–79.99 light green, RSI 80+ dark green, Date Total `3, 6` / `6, 3` purple.
 Daily/weekly/futures change columns go green/red. Tuesday rows get a light-blue row fill when created.
 
-Notes on the intraday data: Yahoo keeps only ~60 days of 5/15/30-min history, so older rows have
-no RSI. 45-min candles are built from 15-min ones. Today's RSI is filled only on a run after 15:35 IST.
+Notes on the intraday data: Yahoo keeps only ~60 days of 5/15/30-min history (so older rows have no
+5/15/30/45m RSI) but about 2 years of 60-min history, so **RSI 60m fills back much further**. 45-min candles are built from 15-min ones. Today's RSI is filled only on a run after 15:35 IST.
 
 ## Your edits are safe
 The script only **adds missing rows** and **fills empty cells**. It never rewrites a cell that has a value,
@@ -184,6 +184,6 @@ Run tests: `venv/bin/pip install -r requirements-dev.txt && venv/bin/python -m p
 | `No module named ...` | Should self-heal; if not: `venv/bin/python -m pip install -r requirements.txt` (Windows: `venv\\Scripts\\python.exe ...`) |
 | "No new data" | Market closed or already up to date (futures/RSI still refresh) |
 | Futures blank | Groww page changed or down; OHLC is still saved |
-| RSI blank on old rows | Yahoo intraday history limit (~60 days) |
+| RSI blank on old rows | Yahoo intraday history limit (~60 days; ~2 years for 60m) |
 
 Logs: `logs/nse_fetcher.log`. Provided as-is for personal and educational use; not financial advice.

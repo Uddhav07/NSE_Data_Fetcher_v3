@@ -1,7 +1,8 @@
-"""Intraday RSI (5/15/30/45-minute candles) from Yahoo Finance.
+"""Intraday RSI (5/15/30/45/60-minute candles) from Yahoo Finance.
 
 For each trading date we report the RSI of the **last candle of the day**.
-Yahoo only serves ~60 days of 5m/15m/30m history, so older dates get no value.
+Yahoo only serves ~60 days of 5m/15m/30m history (about 2 years of 60m), so older
+dates get no value for the shorter timeframes.
 45-minute candles are built from 15-minute candles (Yahoo has no native 45m).
 """
 from __future__ import annotations
@@ -19,7 +20,7 @@ from .market import session_in_progress, today_str
 logger = logging.getLogger(__name__)
 
 RSI_PERIOD = 14
-INTERVALS = (5, 15, 30, 45)
+INTERVALS = (5, 15, 30, 45, 60)
 
 # date "YYYY-MM-DD" -> {minutes: rsi}
 RsiMap = dict
@@ -53,7 +54,7 @@ def _last_rsi_per_day(close: pd.Series) -> dict:
 
 
 def compute_rsi_map(closes: dict) -> RsiMap:
-    """closes: {5: Series, 15: Series, 30: Series} of intraday closes. Adds 45m."""
+    """closes: {5/15/30/60: Series} of intraday closes. Adds 45m (built from 15m)."""
     series = dict(closes)
     if 15 in closes and len(closes[15]):
         series[45] = _to_45m(closes[15])
@@ -66,10 +67,10 @@ def compute_rsi_map(closes: dict) -> RsiMap:
     return result
 
 
-def _download(config: AppConfig, interval: str) -> Optional[pd.Series]:
+def _download(config: AppConfig, interval: str, period: str = "60d") -> Optional[pd.Series]:
     for attempt in range(1, config.max_retries + 1):
         try:
-            df = yf.Ticker(config.ticker).history(period="60d", interval=interval)
+            df = yf.Ticker(config.ticker).history(period=period, interval=interval)
             if df.empty:
                 return None
             close = df["Close"].dropna()
@@ -86,9 +87,9 @@ def _download(config: AppConfig, interval: str) -> Optional[pd.Series]:
 def fetch_rsi(config: AppConfig) -> RsiMap:
     """Download 5/15/30m candles and compute last-candle-of-day RSI. {} on failure."""
     closes = {}
-    for minutes in (5, 15, 30):
+    for minutes in (5, 15, 30, 60):
         logger.info("Fetching %dm candles for RSI...", minutes)
-        s = _download(config, f"{minutes}m")
+        s = _download(config, f"{minutes}m", "700d" if minutes == 60 else "60d")
         if s is not None:
             closes[minutes] = s
     if not closes:

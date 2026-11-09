@@ -63,24 +63,25 @@ COLUMNS = [
     ("Close Below prev Low",       12.0,  "yellow"),  # J
     ("HH / HL",                     10.5,  "yellow"),  # K
     ("LL / LH",                     10.5,  "yellow"),  # L
-    ("Diff in Future",              9.5,  "plain"),   # M  (= T - Close)
+    ("Diff in Future",              9.5,  "plain"),   # M  (= U - Close)
     ("Date Total",                  10.0,  "plain"),   # N  "day, digit-root of full date"
     ("RSI 5m",                       8.0,  "plain"),   # O
     ("RSI 15m",                      8.0,  "plain"),   # P
     ("RSI 30m",                      8.0,  "plain"),   # Q
     ("RSI 45m",                      8.0,  "plain"),   # R
-    ("Moon Nakshatra (9:15am)",     18.0,  "plain"),   # S
-    ("Future as on Date",          13.0,  "plain"),   # T
-    ("Future Expiry",              13.0,  "plain"),   # U
-    ("Comments",                    30.0,  "plain"),   # V — user notes (never overwritten)
+    ("RSI 60m",                      8.0,  "plain"),   # S
+    ("Moon Nakshatra (9:15am)",     18.0,  "plain"),   # T
+    ("Future as on Date",           13.0,  "plain"),   # U
+    ("Future Expiry",               13.0,  "plain"),   # V
+    ("Comments",                    30.0,  "plain"),   # W — user notes (never overwritten)
 ]
 _DATE_TOTAL_COL = 14
-_RSI_COLS = {5: 15, 15: 16, 30: 17, 45: 18}   # minutes -> column index
-_NAKSHATRA_COL = 19
+_RSI_COLS = {5: 15, 15: 16, 30: 17, 45: 18, 60: 19}   # minutes -> column index
+_NAKSHATRA_COL = 20
 _DIFF_COL = 13
-_FUT_COL = 20
-_EXP_COL = 21
-_COMMENTS_COL = 22
+_FUT_COL = 21
+_EXP_COL = 22
+_COMMENTS_COL = 23
 
 
 def _apply_header_style(ws) -> None:
@@ -119,39 +120,71 @@ def _ensure_headers(ws) -> None:
                 ws.column_dimensions[letter].width = width + 2  # room for the filter button
 
 
-# Old layout (<= v3.2): N Future, O Expiry, P Comments, Q Date Total, R-U RSI, V Nakshatra.
-# New layout: N Date Total, O-R RSI, S Nakshatra, T Future, U Expiry, V Comments.
-_OLD_TO_NEW = {14: 20, 15: 21, 16: 22, 17: 14, 18: 15, 19: 16, 20: 17, 21: 18, 22: 19}
+# Layout history:
+#  v3.1-3.3 ("A"): N Future, O Expiry, P Comments, Q Date Total, R-U RSI, V Nakshatra
+#  v3.4-3.5 ("B"): N Date Total, O-R RSI, S Nakshatra, T Future, U Expiry, V Comments
+#  now      ("C"): N Date Total, O-S RSI (5/15/30/45/60), T Nakshatra, U Future, V Expiry, W Comments
+_OLD_TO_NEW = {14: 20, 15: 21, 16: 22, 17: 14, 18: 15, 19: 16, 20: 17, 21: 18, 22: 19}  # A -> B
 
 
-def _migrate_layout(ws) -> bool:
-    """Move columns N:V from the old order to the new one, keeping every value,
-    cell style, cell comment and your Comments notes. Returns True if it migrated."""
-    if not str(ws.cell(1, 16).value or "").strip().startswith("Comments"):
-        return False
+def _snapshot(ws, cols):
     snap = {}
     for r in range(1, ws.max_row + 1):
-        for old in _OLD_TO_NEW:
-            c = ws.cell(r, old)
+        for col in cols:
+            c = ws.cell(r, col)
             cm = c.comment
-            snap[(r, old)] = (c.value, copy(c._style),
+            snap[(r, col)] = (c.value, copy(c._style),
                               (cm.text, cm.author, cm.width, cm.height) if cm else None)
             c.comment = None
-    for (r, old), (value, style, cm) in snap.items():
-        tgt = ws.cell(r, _OLD_TO_NEW[old])
+    return snap
+
+
+def _restore(ws, snap, target_of):
+    for (r, col), (value, style, cm) in snap.items():
+        tgt = ws.cell(r, target_of(col))
         tgt.value = value
         tgt._style = style
         if cm:
             tgt.comment = Comment(cm[0], cm[1], height=cm[3], width=cm[2])
-    for r in range(2, ws.max_row + 1):  # "Diff in Future" now points at column T
+
+
+def _repoint_diff(ws, old_col: str, new_col: str) -> None:
+    pat = re.compile(r"^=" + old_col + r"(\d+)-F(\d+)$")
+    for r in range(2, ws.max_row + 1):
         m = ws.cell(r, _DIFF_COL)
         if isinstance(m.value, str):
-            m.value = re.sub(r"^=N(\d+)-F(\d+)$", r"=T\1-F\2", m.value)
-    for col, (_, width, _g) in enumerate(COLUMNS, start=1):
-        if col >= 13:
-            ws.column_dimensions[get_column_letter(col)].width = width + 2  # room for the filter button
-    logger.info("Column layout updated: Future / Expiry / Comments moved to the end.")
-    return True
+            m.value = pat.sub(lambda mo: f"={new_col}{mo.group(1)}-F{mo.group(2)}", m.value)
+
+
+def _migrate_layout(ws) -> bool:
+    """Bring an older column order up to date, keeping every value, cell style,
+    cell comment and your Comments notes. Returns True if anything moved."""
+    def head(c):
+        return str(ws.cell(1, c).value or "").strip()
+
+    moved = False
+    if head(16).startswith("Comments"):                      # layout A -> B
+        snap = _snapshot(ws, list(_OLD_TO_NEW))
+        _restore(ws, snap, lambda col: _OLD_TO_NEW[col])
+        _repoint_diff(ws, "N", "T")
+        moved = True
+    if head(22).startswith("Comments") and not head(19).startswith("RSI 60"):   # B -> C
+        # style template for the new RSI 60m column = the RSI 45m column next to it
+        template = {r: copy(ws.cell(r, 18)._style) for r in range(1, ws.max_row + 1)}
+        snap = _snapshot(ws, [19, 20, 21, 22])
+        _restore(ws, snap, lambda col: col + 1)
+        for r in range(1, ws.max_row + 1):
+            c = ws.cell(r, 19)
+            c.value = None
+            c._style = template[r]
+        _repoint_diff(ws, "T", "U")
+        moved = True
+    if moved:
+        for col, (_, width, _g) in enumerate(COLUMNS, start=1):
+            if col >= 13:
+                ws.column_dimensions[get_column_letter(col)].width = width + 2
+        logger.info("Column layout updated (RSI 60m added; Future / Expiry / Comments at the end).")
+    return moved
 
 
 def _as_date(val):
@@ -274,7 +307,10 @@ def _add_conditional_formatting(ws) -> None:
              ("O2:R1048576", "AND(ISNUMBER(O2),O2<30)"),
              ("O2:R1048576", "AND(ISNUMBER(O2),O2>=80)"),
              ("O2:R1048576", "AND(ISNUMBER(O2),O2>=70,O2<80)"),
-             ("N2:N1048576", 'OR(N2="3, 6",N2="6, 3")')}
+             ("N2:N1048576", 'OR(N2="3, 6",N2="6, 3")'),
+             ("O2:S1048576", "AND(ISNUMBER(O2),O2<30)"),
+             ("O2:S1048576", "AND(ISNUMBER(O2),O2>=80)"),
+             ("O2:S1048576", "AND(ISNUMBER(O2),O2>=70,O2<80)")}
     for cf in list(ws.conditional_formatting):
         cf.rules = [r for r in cf.rules
                     if (str(cf.sqref), (r.formula or [""])[0]) not in _ours]
@@ -297,11 +333,11 @@ def _add_conditional_formatting(ws) -> None:
     guard = _Guard
 
     # RSI (R:U) — cell-only colours; <30 red, 70-79.99 light green, 80+ dark green (mutually exclusive)
-    guard.add("O2:R1048576", FormulaRule(formula=["AND(ISNUMBER(O2),O2<30)"],
+    guard.add("O2:S1048576", FormulaRule(formula=["AND(ISNUMBER(O2),O2<30)"],
               fill=_RSI30_FILL, font=_RSI30_FONT))
-    guard.add("O2:R1048576", FormulaRule(formula=["AND(ISNUMBER(O2),O2>=80)"],
+    guard.add("O2:S1048576", FormulaRule(formula=["AND(ISNUMBER(O2),O2>=80)"],
               fill=_RSI80_FILL, font=_RSI80_FONT))
-    guard.add("O2:R1048576", FormulaRule(formula=["AND(ISNUMBER(O2),O2>=70,O2<80)"],
+    guard.add("O2:S1048576", FormulaRule(formula=["AND(ISNUMBER(O2),O2>=70,O2<80)"],
               fill=_RSI70_FILL, font=_RSI70_FONT))
     # Date Total (Q) — only the cell, for "3, 6" and "6, 3"
     guard.add("N2:N1048576", FormulaRule(formula=['OR(N2="3, 6",N2="6, 3")'],
@@ -397,7 +433,7 @@ def _ensure_formulas(ws) -> None:
         # futures difference (M) is ours too: repair only when shifted
         m = ws.cell(row, _DIFF_COL)
         if _is_stale(m.value, row):
-            m.value = f"=T{row}-F{row}"
+            m.value = f"=U{row}-F{row}"
 
 
 def _write_new_row(ws, row: int, date_idx, row_data) -> None:
@@ -542,7 +578,7 @@ def update_workbook(
                 ws.cell(r, _EXP_COL, futures_expiry)
                 ws.cell(r, _EXP_COL).alignment = _CENTER
             if ws.cell(r, _DIFF_COL).value in (None, ""):
-                ws.cell(r, _DIFF_COL, f"=T{r}-F{r}")
+                ws.cell(r, _DIFF_COL, f"=U{r}-F{r}")
                 ws.cell(r, _DIFF_COL).number_format = "#,##0.00"
                 ws.cell(r, _DIFF_COL).alignment = _CENTER
         else:

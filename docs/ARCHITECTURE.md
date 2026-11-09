@@ -35,7 +35,7 @@ The CLI (`run`) and the GUI both call it — **the GUI is not needed for our use
 | `scripts/fetcher.py` | `yf.Ticker(t).history(start, end=tomorrow)`; keep OHLC, drop NaN/zero rows, round 2dp |
 | `scripts/futures.py` | GET `groww.in/futures/nifty`, parse `__NEXT_DATA__` → `contractData.livePrice.{ltp,symbol}`; expiry label from symbol `NIFTY25NOVFUT` → "NIFTY Nov 2025 Fut" |
 | `scripts/excel_writer.py` | workbook creation, row append, formulas, Tuesday fill, conditional formats |
-| `scripts/rsi.py` | 5/15/30m candles (period 60d) → Wilder RSI(14) → last value per date; 45m built from 15m; today skipped before 15:35 IST |
+| `scripts/rsi.py` | 5/15/30m candles (period 60d) and 60m candles (period 700d) → Wilder RSI(14) → last value per date; 45m built from 15m; today skipped before 15:35 IST |
 | `scripts/nakshatra.py` | Moon sidereal longitude (pure-Python Meeus series in `moon_calc.py` + Lahiri ayanamsa) at 03:45 UT (09:15 IST) → one of 27 nakshatras; verified against Swiss Ephemeris over 3,650 days (max 0.008°, 0 mismatches) |
 
 ## Excel layout (sheet `NSE_Data`, header row frozen)
@@ -51,13 +51,13 @@ The CLI (`run`) and the GUI both call it — **the GUI is not needed for our use
 | J | Close Below prev Low | `=IF(F_n<E_prev,"Low","-")` |
 | K | HH / HL | `=IF(D_n>D_prev,"Higher High","LH")` |
 | L | LL / LH | `=IF(E_n<E_prev,"L Low","Higher Low")` |
-| M | Diff in Future | `=T-F` (only on futures row) |
+| M | Diff in Future | `=U-F` (only on futures row) |
 | N | Date Total | `=DAY(B)&", "&(1+MOD(yyyymmdd-1,9))` |
-| O–R | RSI 5m/15m/30m/45m | static numbers at 15:30 IST close |
-| S | Moon Nakshatra | static text, left-aligned |
-| T | Future as on Date | scraped LTP (latest row only) |
-| U | Future Expiry | e.g. "NIFTY Nov 2026 Fut" |
-| V | Comments | user-owned, always the last column |
+| O–S | RSI 5m/15m/30m/45m/60m | static numbers at 15:30 IST close |
+| T | Moon Nakshatra | static text, left-aligned |
+| U | Future as on Date | scraped LTP (latest row only) |
+| V | Future Expiry | e.g. "NIFTY Nov 2026 Fut" |
+| W | Comments | user-owned, always the last column |
 
 Header colors: B–H blue `366092`, I–L gold `BF8F00`, others plain. Tuesday rows: whole
 row A–P filled (theme 9, tint 0.4). Conditional formats on G, H, M: green >0 / red <0,
@@ -75,10 +75,10 @@ skipped on Tuesdays via `WEEKDAY($B2,2)<>2`. Duplicate dates are skipped, never 
 `run_fetch` fetches from `min(start_date, last_date+1)`. `update_workbook` inserts missing dates in chronological order (`insert_rows`), re-points formulas whose first reference no longer matches their row (`_ensure_formulas`), and fills empty cells only. `bootstrap.ensure_dependencies()` runs before pandas is imported and, if needed, builds `venv/`, installs requirements and re-executes inside it. Rows/futures for today are skipped while the session is open (`market.session_in_progress`).
 
 ## Table (v3.5)
-`_apply_table` (re)creates one Excel Table `NSE_Table` over A1:V<last row> after every update; headers are normalised to single-line text first. Row visibility (filters) cannot follow `insert_rows`, so filters are cleared when a day is inserted above existing rows.
+`_apply_table` (re)creates one Excel Table `NSE_Table` over A1:W<last row> after every update; headers are normalised to single-line text first. Row visibility (filters) cannot follow `insert_rows`, so filters are cleared when a day is inserted above existing rows.
 
 ## Edit-safety contract (v3.2)
-Rows are only appended; Q–V (and futures M–O) are filled only into **empty** cells; headers are added only if missing; Tuesday fill only on new rows; conditional formats are added only if absent (our own RSI/Date Total rules are replaced on update so colour changes apply). Colours are always **cell-only**.
+Rows are only appended; N–W (and futures) are filled only into **empty** cells; headers are added only if missing; Tuesday fill only on new rows; conditional formats are added only if absent (our own RSI/Date Total rules are replaced on update so colour changes apply). Colours are always **cell-only**.
 
 ## Issues found in the original — status (all addressed in 3.2.0)
 1. `os.startfile` in `main.py:_open_excel` is **Windows-only** → use `open` on macOS (`subprocess.run(["open", path])`).
