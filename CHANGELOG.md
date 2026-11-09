@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.5.0
+### Added
+- The sheet is now an Excel **Table** (`NSE_Table`, A1:V<last>) with filter buttons on every column; its range is refreshed on every run. Header names are single-line (no line breaks) as Excel tables require, and filter-button room was added to default column widths.
+### Notes
+- Filter, don't sort: the formulas reference the previous row. If a missing day is inserted mid-sheet, stale filter-hidden rows are cleared so visibility can't shift onto wrong rows.
+
 ## 3.4.0
 ### Changed
 - **Column order:** `Future as on Date`, `Future Expiry` and `Comments` now sit at the end (T, U, V). Order is now … M Diff in Future, N Date Total, O–R RSI, S Moon Nakshatra, T Future, U Expiry, V Comments. Existing workbooks are migrated automatically on the next run (backup first); values, formatting, notes and cell comments move with their columns, formulas and colour rules are re-pointed.

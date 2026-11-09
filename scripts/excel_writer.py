@@ -14,6 +14,7 @@ from copy import copy
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.comments import Comment
+from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
 
@@ -58,19 +59,19 @@ COLUMNS = [
     ("Close",                        13.0,  "blue"),    # F
     ("Daily Change",                  9.5,  "blue"),    # G
     ("Weekly Change",                13.0,  "blue"),    # H
-    ("Close Above\nprev High",      12.0,  "yellow"),  # I
-    ("Close Below\nprev Low",       12.0,  "yellow"),  # J
+    ("Close Above prev High",      12.0,  "yellow"),  # I
+    ("Close Below prev Low",       12.0,  "yellow"),  # J
     ("HH / HL",                     10.5,  "yellow"),  # K
     ("LL / LH",                     10.5,  "yellow"),  # L
-    ("Diff in\nFuture",              9.5,  "plain"),   # M  (= T - Close)
-    ("Date\nTotal",                  10.0,  "plain"),   # N  "day, digit-root of full date"
-    ("RSI\n5m",                       8.0,  "plain"),   # O
-    ("RSI\n15m",                      8.0,  "plain"),   # P
-    ("RSI\n30m",                      8.0,  "plain"),   # Q
-    ("RSI\n45m",                      8.0,  "plain"),   # R
-    ("Moon Nakshatra\n(9:15am)",     18.0,  "plain"),   # S
-    ("Future\nas on Date",          13.0,  "plain"),   # T
-    ("Future\nExpiry",              13.0,  "plain"),   # U
+    ("Diff in Future",              9.5,  "plain"),   # M  (= T - Close)
+    ("Date Total",                  10.0,  "plain"),   # N  "day, digit-root of full date"
+    ("RSI 5m",                       8.0,  "plain"),   # O
+    ("RSI 15m",                      8.0,  "plain"),   # P
+    ("RSI 30m",                      8.0,  "plain"),   # Q
+    ("RSI 45m",                      8.0,  "plain"),   # R
+    ("Moon Nakshatra (9:15am)",     18.0,  "plain"),   # S
+    ("Future as on Date",          13.0,  "plain"),   # T
+    ("Future Expiry",              13.0,  "plain"),   # U
     ("Comments",                    30.0,  "plain"),   # V — user notes (never overwritten)
 ]
 _DATE_TOTAL_COL = 14
@@ -87,7 +88,7 @@ def _apply_header_style(ws) -> None:
     for col_idx, (text, width, group) in enumerate(COLUMNS, start=1):
         cell = ws.cell(row=1, column=col_idx, value=text)
         col_letter = get_column_letter(col_idx)
-        ws.column_dimensions[col_letter].width = width
+        ws.column_dimensions[col_letter].width = width + 2  # room for the filter button
 
         if group == "blue":
             cell.fill = _BLUE_FILL
@@ -115,7 +116,7 @@ def _ensure_headers(ws) -> None:
             cell.alignment = _CENTER_WRAP
             letter = get_column_letter(col_idx)
             if ws.column_dimensions[letter].width in (None, 13.0) or letter not in ws.column_dimensions:
-                ws.column_dimensions[letter].width = width
+                ws.column_dimensions[letter].width = width + 2  # room for the filter button
 
 
 # Old layout (<= v3.2): N Future, O Expiry, P Comments, Q Date Total, R-U RSI, V Nakshatra.
@@ -148,7 +149,7 @@ def _migrate_layout(ws) -> bool:
             m.value = re.sub(r"^=N(\d+)-F(\d+)$", r"=T\1-F\2", m.value)
     for col, (_, width, _g) in enumerate(COLUMNS, start=1):
         if col >= 13:
-            ws.column_dimensions[get_column_letter(col)].width = width
+            ws.column_dimensions[get_column_letter(col)].width = width + 2  # room for the filter button
     logger.info("Column layout updated: Future / Expiry / Comments moved to the end.")
     return True
 
@@ -415,6 +416,48 @@ def _write_new_row(ws, row: int, date_idx, row_data) -> None:
             ws.cell(row, col).fill = _TUESDAY_FILL
 
 
+_TABLE_NAME = "NSE_Table"
+
+
+def _normalize_headers(ws) -> None:
+    """Header text on one line (Excel table column names must match the cells exactly)."""
+    for col in range(1, len(COLUMNS) + 1):
+        c = ws.cell(1, col)
+        if isinstance(c.value, str):
+            c.value = " ".join(c.value.split())
+
+
+def _apply_table(ws) -> None:
+    """Format A1:V<last> as an Excel Table so every column has filter/sort buttons.
+
+    Re-created on each run so its range always covers the current rows.
+    """
+    last_row = 1
+    for row in range(ws.max_row, 1, -1):
+        if any(ws.cell(row, c).value not in (None, "") for c in range(1, len(COLUMNS) + 1)):
+            last_row = row
+            break
+    if last_row < 2:
+        return
+    headers = [ws.cell(1, c).value for c in range(1, len(COLUMNS) + 1)]
+    if any(not isinstance(h, str) or not h.strip() for h in headers) or len(set(headers)) != len(headers):
+        logger.warning("Header row has blank or duplicate names — sheet not formatted as a table.")
+        return
+    others = [n for n in ws.tables if n != _TABLE_NAME]
+    if others:
+        logger.warning("Sheet already contains another table (%s) — leaving it alone, "
+                       "not creating the NSE table.", ", ".join(others))
+        return
+    if _TABLE_NAME in ws.tables:
+        del ws.tables[_TABLE_NAME]
+    ref = f"A1:{get_column_letter(len(COLUMNS))}{last_row}"
+    table = Table(displayName=_TABLE_NAME, ref=ref)
+    table.tableStyleInfo = TableStyleInfo(name="TableStyleLight1", showFirstColumn=False,
+                                          showLastColumn=False, showRowStripes=False,
+                                          showColumnStripes=False)
+    ws.add_table(table)
+
+
 def update_workbook(
     excel_path: str,
     data: pd.DataFrame,
@@ -442,9 +485,11 @@ def update_workbook(
     ws = wb.active
     _migrate_layout(ws)
     _ensure_headers(ws)
+    _normalize_headers(ws)
 
     existing = dict(_dated_rows(ws))  # date_str -> row
     added = skipped = 0
+    shifted = False  # True if a missing day was inserted above existing rows
 
     # 1) existing dates: fill only EMPTY OHLC cells
     for date_idx, row_data in data.iterrows():
@@ -466,10 +511,19 @@ def update_workbook(
         dated = _dated_rows(ws)
         earlier = [r for d, r in dated if d < ds]
         pos = (max(earlier) + 1) if earlier else 2
+        if dated and pos <= max(r for _, r in dated):
+            shifted = True
         ws.insert_rows(pos)
         _write_new_row(ws, pos, date_idx, row_data)
         existing = dict(_dated_rows(ws))
         added += 1
+
+    if shifted:
+        # insert_rows moves cells but not row visibility: drop any stale filter-hidden rows
+        for dim in ws.row_dimensions.values():
+            dim.hidden = False
+        logger.info("Rows were inserted in the middle of the sheet — filters were cleared; "
+                    "re-apply them in Excel if you need them.")
 
     # 3) formulas: fill empty ones, re-point shifted ones
     _ensure_formulas(ws)
@@ -498,6 +552,7 @@ def update_workbook(
     _fill_derived_columns(ws, rsi)
 
     _add_conditional_formatting(ws)
+    _apply_table(ws)
     ws.freeze_panes = "A2"
     if newest_row:
         _scroll_to_latest(ws, newest_row)

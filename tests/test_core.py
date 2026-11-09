@@ -175,3 +175,22 @@ def test_old_layout_is_migrated_without_losing_anything(tmp_path):
     snap1 = [[c.value for c in row] for row in ws.iter_rows()]
     update_workbook(p, _df(["2026-01-05", "2026-01-06"]))
     assert snap1 == [[c.value for c in row] for row in load_workbook(p).active.iter_rows()]
+
+
+def test_formatted_as_table_for_filtering(tmp_path):
+    p = str(tmp_path / "t.xlsx")
+    create_workbook(p)
+    update_workbook(p, _df(["2026-01-05", "2026-01-06", "2026-01-07"]))
+    ws = load_workbook(p).active
+    assert list(ws.tables) == ["NSE_Table"]
+    t = ws.tables["NSE_Table"]
+    assert t.ref == "A1:V4"
+    # header names are single-line, unique strings (required by Excel tables)
+    heads = [ws.cell(1, c).value for c in range(1, 23)]
+    assert all(isinstance(h, str) and "\n" not in h for h in heads) and len(set(heads)) == 22
+    # a missing earlier day is inserted -> table grows; rerun keeps exactly one table
+    update_workbook(p, _df(["2026-01-02", "2026-01-05", "2026-01-06", "2026-01-07"]))
+    ws = load_workbook(p).active
+    assert list(ws.tables) == ["NSE_Table"] and ws.tables["NSE_Table"].ref == "A1:V5"
+    update_workbook(p, _df(["2026-01-02"]))
+    assert load_workbook(p).active.tables["NSE_Table"].ref == "A1:V5"

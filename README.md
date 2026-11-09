@@ -145,6 +145,9 @@ To stop it: `schtasks /Delete /TN "NSE Data Fetcher" /F`. Set `"open_excel_after
 | T–U | **Future as on Date**, **Future Expiry** (newest row only) |
 | V | **Comments** — yours, never written by the script |
 
+**Filtering:** the data is formatted as an Excel Table (`NSE_Table`), so every column has filter buttons — e.g. filter RSI ≥ 70, Date Total `3, 6`, or one Nakshatra. The table grows by itself as rows are added.
+Use **filters only — don't sort** the table: Daily/Weekly change and the High/Low formulas compare with the row above, so sorting would scramble them (and the script expects dates in order). To analyse in another order, copy the data to a new sheet first. If a missing day is ever inserted in the middle of the sheet, active filters are cleared and you re-apply them.
+
 **Updating from an older version?** Your existing workbook is migrated automatically on the next run (a backup goes to `archive/` first): Future, Expiry and Comments move to the end, and your notes, values and formatting travel with them.
 
 Cell-only colours: RSI below 30 red, RSI 70–79.99 light green, RSI 80+ dark green, Date Total `3, 6` / `6, 3` purple.
