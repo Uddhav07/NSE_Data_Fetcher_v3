@@ -187,11 +187,11 @@ setup.sh/run.sh (+ .command wrappers) · setup.bat/run.bat (Windows)
 scripts/  main.py (CLI+orchestration) · fetcher.py (Yahoo OHLC) · futures.py (Groww)
           rsi.py (intraday RSI) · nakshatra.py + moon_calc.py (Moon, pure Python) · excel_writer.py · config_manager.py · paths.py
           bootstrap.py (auto-install deps) · market.py (session hours)
-config/   config.json        tests/  test_core.py (pytest, no network)
+config/   config.json        tests/  pytest suite, no network (golden workbook, pipeline, indicators)
 data/ archive/ logs/         generated at runtime (git-ignored)
 docs/     ARCHITECTURE.md · PLAN.md        CHANGELOG.md
 ```
-Run tests: `venv/bin/pip install -r requirements-dev.txt && venv/bin/python -m pytest tests`
+Run tests: `venv/bin/pip install -r requirements-dev.txt && venv/bin/python -m pytest && venv/bin/ruff check scripts tests`
 
 ## Troubleshooting
 | Problem | Fix |

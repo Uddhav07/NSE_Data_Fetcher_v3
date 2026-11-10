@@ -1,0 +1,35 @@
+# Offline test suite on every OS the project is used on (the Windows path is otherwise untested).
+# No network access to Yahoo/Groww is needed: all sources are mocked in the tests.
+name: tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.9", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - name: Install
+        run: python -m pip install --disable-pip-version-check -r requirements-dev.txt
+      - name: Lint
+        run: python -m ruff check scripts tests
+      - name: Tests
+        run: python -m pytest
+      - name: Launcher line endings
+        if: runner.os == 'Linux'
+        run: |
+          for f in *.bat; do file "$f" | grep -q CRLF || { echo "$f must be CRLF"; exit 1; }; done
+          for f in *.sh *.command; do ! file "$f" | grep -q CRLF || { echo "$f must be LF"; exit 1; }; done

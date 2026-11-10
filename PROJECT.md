@@ -107,7 +107,7 @@ The sheet is a **working document the user edits**, not a report the script owns
 
 ### 4.7 Engineering and repository practice
 - **Modular package** (`fetcher`, `futures`, `rsi`, `nakshatra`, `moon_calc`, `excel_writer`, `config_manager`, `bootstrap`, `market`, `paths`, `main`); `run_fetch()` returns a result object and never exits.
-- **Tests without network** (13 pytest tests): gap insertion, formula repair, edit preservation, layout migrations, table, refresh rules, bootstrap.
+- **Tests without network** (pytest, CI on 3 OSes): a golden snapshot of the whole workbook, the run pipeline with mocked sources, gap insertion, formula repair, edit preservation, layout migrations, table, refresh rules, RSI/Moon maths against references, bootstrap.
 - **Real-world checks beyond unit tests:** clean-room fresh-folder runs, a bare system Python without pandas, a deleted-row restore, a scratch-remote test of the update script.
 - **Semantic version tags and a changelog** for every release; the local clones are kept equal to GitHub `main`.
 - **Commit identity:** GitHub noreply address, chosen by the user, rather than any work email.

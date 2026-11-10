@@ -14,7 +14,7 @@ A Python script that keeps a daily **Nifty 50 journal in one Excel file** (`data
 - User also runs it on **Windows** (they reported the Nakshatra column blank there → fixed in v3.4.0). Windows scripts and Excel rendering have **never been tested on real Windows/Excel by the developer**.
 - Local copies on the Mac (all equal to GitHub `main`):
   - `~/Music/NSE_Data_Fetcher_v3-main` — **the working folder** (a git clone since v3.3.1; `origin` is SSH). Use this one: it holds `venv/`, the workbook and its ledger (all git-ignored), and runs/pushes happen from here.
-  - `.claude/worktrees/<name>/` — git worktrees the Claude desktop app may create per session (ignored via `.git/info/exclude`). They have **no `venv/` and no workbook**; edit and commit there on the `claude/…` branch, then merge into `main` from the working folder (`git merge --ff-only <branch>`) and push from there. Run tests with the working folder's venv (`../../../venv/bin/python -m pytest -q tests`).
+  - `.claude/worktrees/<name>/` — git worktrees the Claude desktop app may create per session (ignored via `.git/info/exclude`). They have **no `venv/` and no workbook**; edit and commit there on the `claude/…` branch, then merge into `main` from the working folder (`git merge --ff-only <branch>`) and push from there. Run tests with the working folder's venv (`../../../venv/bin/python -m pytest`).
   - `~/Music/NSE_Data_Fetcher_v3_repo` — an older duplicate clone created for pushing; safe to delete.
   - `~/Music/NSE_Data_Fetcher_v3-main_backup.zip` — the untouched original v3.1.0 import, taken before any change.
 - GitHub access: SSH key `~/.ssh/id_ed25519` is registered on the account (user added the public key). `gh` CLI is **not** installed. No global git identity is set; commits use
@@ -55,11 +55,11 @@ scripts/
   nakshatra.py / moon_calc.py   pure-Python Meeus Moon longitude + Lahiri ayanamsa → 27 nakshatras
   excel_writer.py  THE core: layout constants, migrations, row insertion, formula repair, fill-empty, refresh ledger, CF rules, table, scroll
   __init__.py      __version__ (bump every release)
-tests/test_core.py   13 offline pytest tests (see §8)
+tests/   offline pytest suite (see §8) · tests/golden/ snapshot · .github/workflows/tests.yml CI · pyproject.toml tool config
 config/config.json   user settings (ticker, excel_file, start_date, retries, open_excel_after_run, backup…)
 setup.sh/.command/.bat   one-time venv + deps          run.sh/.command/.bat   update + open (per config)
 update_and_run.sh/.command/.bat   git pull --ff-only (only if tracked files unmodified) + deps + run with --open
-requirements.txt (runtime) · requirements-dev.txt (+pytest) · .gitattributes (.bat CRLF; .sh/.command LF) · .gitignore
+requirements.txt (runtime) · requirements-dev.txt (+pytest, ruff) · .gitattributes (.bat CRLF; .sh/.command LF) · .gitignore
 docs/ARCHITECTURE.md  internals     docs/PLAN.md  status & ideas     PROJECT.md  requirements/why/theme/strategy
 CHANGELOG.md  every release         CLAUDE.md  rules for editors        README.md  user guide (Mac/Linux/Windows)
 ```
@@ -96,8 +96,12 @@ CLI flags: `--config`, `--start`, `--full-refresh`, `--no-futures`, `--no-rsi`, 
 9. Never sort the table (formulas reference the previous row; the script assumes date order). Filters only.
 
 ## 8. Testing and verification
-- Run: `venv/bin/python -m pytest -q tests` → **13 pass** (gap insertion + formula repair, edit preservation, A→C and B→C migrations, table, refresh ledger, nakshatra, bootstrap detection, futures/RSI/Date Total).
-- Static: `venv/bin/python -m pyflakes scripts tests` → clean.
+- Run: `venv/bin/python -m pytest` → **54 pass**. Lint: `venv/bin/ruff check scripts tests` → clean.
+  - `test_core.py`: gap insertion + formula repair, edit preservation, A→C and B→C migrations, table, refresh ledger, bootstrap, futures/RSI/Date Total.
+  - `test_golden.py`: **the exact workbook output** of a two-run scenario vs `tests/golden/workbook_scenario.json`. If an output change is intended: `UPDATE_GOLDEN=1 venv/bin/python -m pytest tests/test_golden.py`, then review the JSON diff.
+  - `test_pipeline.py`: `run_fetch` with all sources mocked (live session, futures failure, flags, full refresh, locked file).
+  - `test_indicators.py`: RSI, 45m candles, 15:30 cut-off, Moon vs Swiss Ephemeris/Meeus, nakshatra, session hours.
+- CI (`.github/workflows/tests.yml`): same suite on Ubuntu/macOS/Windows × Python 3.9/3.12 on every push.
 - Manual scenarios already verified on Mac: fresh folder + bare system Python without pandas (bootstrap), deleted-row restore with edits intact, update script in a scratch clone (clean / locally-modified / diverged).
 - **Not verified:** real Windows run of `.bat` files, opening in real Excel (table validity only inspected structurally), LibreOffice.
 
@@ -113,7 +117,7 @@ CLI flags: `--config`, `--start`, `--full-refresh`, `--no-futures`, `--no-rsi`, 
 ## 10. Release checklist (what the previous sessions did each time)
 1. Make the change in `~/Music/NSE_Data_Fetcher_v3-main`; keep `docs/` + `README.md` + `CLAUDE.md` + `PROJECT.md` consistent.
 2. Bump `scripts/__init__.py` `__version__`; add a `CHANGELOG.md` section.
-3. `pytest` + `pyflakes`; run the script on the real sheet or a scratch copy.
+3. `pytest` + `ruff check scripts tests`; run the script on the real sheet or a scratch copy.
 4. `git add -A && git -c user.name=Uddhav07 -c user.email=Uddhav07@users.noreply.github.com commit …` (with the Co-Authored-By trailer), annotated tag `vX.Y.Z`.
 5. `GIT_SSH_COMMAND="ssh -o BatchMode=yes" git push origin main --follow-tags`.
 6. Optionally `git pull --ff-only` in `~/Music/NSE_Data_Fetcher_v3_repo` (or delete it).
@@ -135,6 +139,6 @@ CLI flags: `--config`, `--start`, `--full-refresh`, `--no-futures`, `--no-rsi`, 
 ```bash
 cd ~/Music/NSE_Data_Fetcher_v3-main
 ./run.sh                    # update + open per config      ./update_and_run.sh   # pull, update, open
-./run.sh --refresh-recent   # one-time fix of latest 3 rows  venv/bin/python -m pytest -q tests
+./run.sh --refresh-recent   # one-time fix of latest 3 rows  venv/bin/python -m pytest
 git status -sb && git log --oneline -5
 ```

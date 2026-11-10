@@ -13,8 +13,9 @@ formatting. Read `HANDOVER.md` (state, map, gotchas) and `PROJECT.md` first (req
 ## Run
 ```
 ./setup.sh && ./run.sh        # also: --full-refresh --start DATE, --no-futures, --no-rsi
-venv/bin/python -m pytest tests
+venv/bin/python -m pytest && venv/bin/ruff check scripts tests
 ```
+The golden test (`tests/test_golden.py`) locks the exact workbook output. Regenerate it with `UPDATE_GOLDEN=1` only for an intended change, and review the JSON diff.
 Config: `config/config.json`. Logs: `logs/nse_fetcher.log`. Backups: `archive/`.
 
 ## Rules when editing
@@ -28,5 +29,5 @@ Config: `config/config.json`. Logs: `logs/nse_fetcher.log`. Backups: `archive/`.
 - Launchers: `run.*` (run + open per config) and `update_and_run.*` (git pull --ff-only if tracked files are unmodified, refresh packages, run with `--open`). Never auto-stash/reset; never overwrite local changes. Keep `.bat` CRLF / `.sh` LF.
 - Runs re-check from start_date: insert missing dates in order, repair shifted formulas, fill empty cells. Fill only EMPTY cells (exception: for the latest 3 sessions, OHLC/RSI cells the script wrote — tracked in `<workbook>.state.json` — may be refreshed ONLY if still equal to the ledger value; never touch user-edited cells; `--refresh-recent` is the explicit override); never overwrite user values/formatting. Highlights are **cell-only**, never whole rows — the one exception is the Tuesday full-row fill (A–W, `DDEBF7`, only on rows the script creates); cell colour rules skip or override it per cell. Column M (Diff in Future) stays where it is.
 - Column order: M Diff in Future, N Date Total, O–S RSI (5/15/30/45/60m at 15:30 IST), T Moon Nakshatra (09:15 IST), U Future, V Expiry, W Comments (always last). Old layouts are migrated by `_migrate_layout`.
-- Don't hit Yahoo/Groww in tests; mock `fetch_ohlc_data`/`fetch_futures`.
+- Don't hit Yahoo/Groww in tests; mock `fetch_ohlc_data`/`fetch_futures`/`fetch_rsi` (see `tests/test_pipeline.py`).
 - Confirm before deleting files or `--full-refresh` against the user's real workbook.

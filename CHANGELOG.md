@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.8.4
+Tests and tooling only — the script and the workbook are unchanged (Phase 0 of `docs/PLAN.md`).
+- **Golden workbook test** (`tests/test_golden.py` + `tests/golden/`): a two-run scenario serialised cell by cell (values, formulas, formats, fills, fonts, CF rules, table, view, ledger). Any change to the output fails it.
+- **`run_fetch` tests** with all sources mocked: after close / live session, futures failure, no data, flags, `--full-refresh` backup, locked file, `--open`.
+- **Calculation tests:** Wilder RSI against an independent implementation, 45-minute candles, the 15:30 cut-off, Moon longitude against Swiss Ephemeris and Meeus, nakshatra names, NSE session hours.
+- `pyproject.toml` (pytest + ruff config); `ruff` replaces pyflakes in `requirements-dev.txt`.
+- GitHub Actions CI: tests and lint on Ubuntu, macOS and Windows with Python 3.9 and 3.12, plus a launcher line-ending check.
+
 ## 3.8.3
 - Docs only: Comments is column **W** (stale "column P" / "A–P" / "A–V" references fixed in `CLAUDE.md` and `docs/ARCHITECTURE.md`); README Diff in Future formula is `=U − Close`.
 - Documented the one exception to cell-only colouring: Tuesday rows created by the script get a full-row fill (A–W, `DDEBF7`); cell colours still show.

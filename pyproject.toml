@@ -1,0 +1,20 @@
+# Tool configuration only. The project is run as scripts (see README), not installed as a package.
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+filterwarnings = [
+    # macOS system Python links LibreSSL; harmless for our HTTPS calls
+    "ignore:urllib3 v2 only supports OpenSSL",
+]
+
+[tool.ruff]
+target-version = "py39"
+line-length = 120
+extend-exclude = ["venv", "archive"]
+
+[tool.ruff.lint]
+# Phase 0: pyflakes (F) + syntax errors (E9), the same bar as before.
+# Widen (E, W, I, B, UP) during the Phase 3 restructure, when files are rewritten anyway.
+select = ["F", "E9"]
