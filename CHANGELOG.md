@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.8.3
+- Docs only: Comments is column **W** (stale "column P" / "A–P" / "A–V" references fixed in `CLAUDE.md` and `docs/ARCHITECTURE.md`); README Diff in Future formula is `=U − Close`.
+- Documented the one exception to cell-only colouring: Tuesday rows created by the script get a full-row fill (A–W, `DDEBF7`); cell colours still show.
+- Recorded decision: Diff in Future stays at column M. `HANDOVER.md` explains the working folder vs Claude worktrees.
+
 ## 3.8.2
 - Added `HANDOVER.md`: chat summary, file/architecture map, rules, gotchas, release checklist, current state and open items for whoever takes over.
 

@@ -20,11 +20,11 @@ The sheet is a **working document the user edits**, not a report the script owns
 | F1 | Fetch Nifty 50 (`^NSEI`) daily OHLC from Yahoo Finance; incremental (only what's missing) | original v2.1 / v3 |
 | F2 | Futures price + expiry on the newest row only (Groww scrape) | original |
 | F3 | Formula columns: daily change, weekly change (5 trading rows back, holiday-aware), close above prev high / below prev low, HH-HL, LL-LH, futures difference | original |
-| F4 | Tuesday rows highlighted (created rows only) | original |
+| F4 | Tuesday rows highlighted across the whole row A–W (created rows only) — the one exception to cell-only | original |
 | F5 | **Date Total** column, e.g. `9, 3` = day number, then the date's digits summed to one digit (2026-11-09 → 21 → 3) | [User] |
 | F6 | **RSI(14)** for 5 / 15 / 30 / 45 / 60-minute candles, always as of the **15:30 IST** close | [User] |
 | F7 | **Moon Nakshatra** at 09:15 IST for each day | [User] |
-| F8 | Cell-only colour rules: RSI <30 red, 70–79.99 light green, ≥80 dark green; Date Total `3, 6` / `6, 3` purple. **Never whole rows** | [User] |
+| F8 | Cell-only colour rules: RSI <30 red, 70–79.99 light green, ≥80 dark green; Date Total `3, 6` / `6, 3` purple. **Never whole rows** (except F4 Tuesday fill) | [User] |
 | F9 | Data formatted as an Excel Table so every column can be filtered | [User] |
 | F10 | Sheet opens scrolled to the latest date | [User] |
 | F11 | Column order ends with Future, Expiry, Comments (Comments always last) | [User] |

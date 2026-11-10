@@ -1,6 +1,6 @@
 # Project Handover — NSE Data Fetcher
 
-Written for release **v3.8.2** (9 Nov 2026). Purpose: let a new person, or a new Claude session, take over without the original chat.
+Written for release **v3.8.3** (10 Nov 2026). Purpose: let a new person, or a new Claude session, take over without the original chat.
 Read order for a newcomer: **this file → `PROJECT.md` (why) → `README.md` (use) → `docs/ARCHITECTURE.md` (internals) → `CLAUDE.md` (editing rules)**.
 
 ---
@@ -9,11 +9,12 @@ Read order for a newcomer: **this file → `PROJECT.md` (why) → `README.md` (u
 A Python script that keeps a daily **Nifty 50 journal in one Excel file** (`data/stock_market_NSE50.xlsx`, sheet `NSE_Data`, an Excel Table `NSE_Table`, columns A–W). Each run adds missing trading days (Yahoo Finance OHLC), formulas (daily/weekly change, High/Low breaks, HH/HL, LL/LH), the current Nifty futures price (Groww scrape), RSI(14) at the 15:30 IST close for 5/15/30/45/60-minute candles, a "Date Total" (e.g. `9, 3`) and the Moon's nakshatra at 09:15 IST. The sheet is the user's working document: the script only **adds rows and fills empty cells**; the user's edits and notes survive.
 
 ## 2. Who, where, and what environment
-- Owner: GitHub user **Uddhav07**, repo `github.com/Uddhav07/NSE_Data_Fetcher_v3` (default branch `main`, tags `v3.1.0` … `v3.8.1`).
+- Owner: GitHub user **Uddhav07**, repo `github.com/Uddhav07/NSE_Data_Fetcher_v3` (default branch `main`, tags `v3.1.0` … `v3.8.3`).
 - Dev machine: **macOS, system Python 3.9.6** (no brew Python) — hence the code supports **Python 3.9+** (`from __future__ import annotations`).
 - User also runs it on **Windows** (they reported the Nakshatra column blank there → fixed in v3.4.0). Windows scripts and Excel rendering have **never been tested on real Windows/Excel by the developer**.
 - Local copies on the Mac (all equal to GitHub `main`):
-  - `~/Music/NSE_Data_Fetcher_v3-main` — **the working folder** (a git clone since v3.3.1; `origin` is SSH). Use this one.
+  - `~/Music/NSE_Data_Fetcher_v3-main` — **the working folder** (a git clone since v3.3.1; `origin` is SSH). Use this one: it holds `venv/`, the workbook and its ledger (all git-ignored), and runs/pushes happen from here.
+  - `.claude/worktrees/<name>/` — git worktrees the Claude desktop app may create per session (ignored via `.git/info/exclude`). They have **no `venv/` and no workbook**; edit and commit there on the `claude/…` branch, then merge into `main` from the working folder (`git merge --ff-only <branch>`) and push from there. Run tests with the working folder's venv (`../../../venv/bin/python -m pytest -q tests`).
   - `~/Music/NSE_Data_Fetcher_v3_repo` — an older duplicate clone created for pushing; safe to delete.
   - `~/Music/NSE_Data_Fetcher_v3-main_backup.zip` — the untouched original v3.1.0 import, taken before any change.
 - GitHub access: SSH key `~/.ssh/id_ed25519` is registered on the account (user added the public key). `gh` CLI is **not** installed. No global git identity is set; commits use
@@ -80,13 +81,14 @@ CLI flags: `--config`, `--start`, `--full-refresh`, `--no-futures`, `--no-rsi`, 
 `A Day · B Date · C–F OHLC · G Daily Change · H Weekly Change · I Close Above prev High · J Close Below prev Low · K HH/HL · L LL/LH · M Diff in Future · N Date Total · O–S RSI 5/15/30/45/60m · T Moon Nakshatra (9:15am) · U Future as on Date · V Future Expiry · W Comments`
 - Headers are single-line unique strings (Excel Table requirement). Table ref `A1:W<last>` is rebuilt every run.
 - Layout history is encoded in `_migrate_layout`: layout **A** (≤3.3: Future/Expiry/Comments at N–P) → **B** (3.4–3.5) → **C** (current, adds RSI 60m). Any change to the layout needs a new migration step + a test.
-- Colours (cell-only): RSI <30 red, 70–79.99 light green, ≥80 dark green; Date Total `3, 6`/`6, 3` purple; change columns green/red; Tuesday rows light blue **only on rows the script creates**.
+- Colours (cell-only): RSI <30 red, 70–79.99 light green, ≥80 dark green; Date Total `3, 6`/`6, 3` purple; change columns green/red; **Exception:** Tuesday rows get a full-row light-blue fill (A–W, `DDEBF7`) **only on rows the script creates** — the only whole-row style allowed; the green/red change rules skip Tuesdays, and the cell-only RSI/Date Total colours still show on top.
+- M (Diff in Future) **stays at M** — decided by the user (Nov 2026); only Future/Expiry/Comments live at the end.
 
 ## 7. Rules that must keep holding (the design contract)
 1. **Fill only empty cells.** Never overwrite a value, fill, font, header, note or user CF rule.
 2. **One exception:** the refresh ledger (`data/<workbook>.state.json`) lets the latest 3 sessions' OHLC/RSI cells update to Yahoo's final values **only if the cell still equals what the script wrote**. `--refresh-recent` is the explicit override. Legacy sheets without a ledger are *not* auto-refreshed.
 3. Comments (W) is user-owned and stays last.
-4. Highlights are **cell-only**, never rows (also saved as a persistent feedback memory).
+4. Highlights are **cell-only**, never rows (also saved as a persistent feedback memory). Sole exception: the Tuesday full-row fill on script-created rows.
 5. Backup before every write; friendly errors (e.g. "close Excel").
 6. No hard-coded user folders in code or docs; `excel_file` can be any path.
 7. Futures failing must not block OHLC; each optional source degrades one column only.
@@ -118,13 +120,12 @@ CLI flags: `--config`, `--start`, `--full-refresh`, `--no-futures`, `--no-rsi`, 
 7. GitHub *Releases* pages are not created (no `gh`); changelog sections can be pasted manually.
 
 ## 11. State right now
-- GitHub `main` = `v3.8.2`; working folder clean and equal to `origin/main`.
+- `main` = `v3.8.3`; working folder clean and equal to `origin/main`.
 - The workbook in the working folder (`data/stock_market_NSE50.xlsx`, 210 rows 2026-01-01 → 2026-11-09) is **test/demo data built by the script**; it is git-ignored. It may be open in Excel (a `~$` lock file was seen).
 - The user's real Windows copy is on another machine; it upgrades itself (layout migration + bootstrap) after `git pull` or `update_and_run.bat`. It may still hold values saved before the ledger existed → tell them to run `--refresh-recent` once if a recent day looks off.
 
 ## 12. Open items / ideas (none are in progress)
 - Verify on real Windows + real Excel (table opens without repair prompt, colours render, `.bat` flow).
-- Decide whether "Diff in Future" (M) should also move to the end (user only named Future/Expiry/Comments).
 - Sturdier futures source than the Groww scrape.
 - Create GitHub Release notes from `CHANGELOG.md` (needs `gh` or manual).
 - Optional: delete the duplicate `NSE_Data_Fetcher_v3_repo` clone.

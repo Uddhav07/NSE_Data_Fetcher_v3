@@ -5,7 +5,7 @@ Daily journal of the **Nifty 50** (`^NSEI`) in one Excel file. Each run appends 
 new trading days' OHLC, adds price-action formulas (daily/weekly change, close vs
 previous high/low, HH/HL, LL/LH), and stamps the current **Nifty futures** price and
 expiry on the latest row so the user can see futures premium/discount. Tuesdays are
-highlighted (weekly-expiry day, a trader's convention). Column P "Comments" is the
+highlighted (weekly-expiry day, a trader's convention). Column W "Comments" is the
 user's own notes and is never overwritten.
 
 ## Pipeline (`scripts/main.py:run_fetch`)
@@ -60,7 +60,8 @@ The CLI (`run`) and the GUI both call it — **the GUI is not needed for our use
 | W | Comments | user-owned, always the last column |
 
 Header colors: B–H blue `366092`, I–L gold `BF8F00`, others plain. Tuesday rows: whole
-row A–P filled (theme 9, tint 0.4). Conditional formats on G, H, M: green >0 / red <0,
+row A–W filled (fixed RGB `DDEBF7`), only on rows the script creates — the single
+exception to cell-only colouring. Conditional formats on G, H, M: green >0 / red <0,
 skipped on Tuesdays via `WEEKDAY($B2,2)<>2`. Duplicate dates are skipped, never overwritten.
 
 ## Key design properties to preserve
@@ -81,15 +82,15 @@ skipped on Tuesdays via `WEEKDAY($B2,2)<>2`. Duplicate dates are skipped, never 
 `update_workbook` records every OHLC/RSI value it newly writes in `<workbook>.state.json` (last 10 dates). `_refresh_recent` re-checks the latest 3 dated rows against fresh data and overwrites a cell only when it still equals the ledger value; `--refresh-recent N` forces N rows. Reason: Yahoo's final 5/15/30/60m candles and the daily close are revised after the session.
 
 ## Edit-safety contract (v3.2)
-Rows are only appended; N–W (and futures) are filled only into **empty** cells; headers are added only if missing; Tuesday fill only on new rows; conditional formats are added only if absent (our own RSI/Date Total rules are replaced on update so colour changes apply). Colours are always **cell-only**.
+Rows are only appended; N–W (and futures) are filled only into **empty** cells; headers are added only if missing; Tuesday fill only on new rows; conditional formats are added only if absent (our own RSI/Date Total rules are replaced on update so colour changes apply). Colours are always **cell-only** (except the Tuesday row fill).
 
 ## Issues found in the original — status (all addressed in 3.2.0)
 1. `os.startfile` in `main.py:_open_excel` is **Windows-only** → use `open` on macOS (`subprocess.run(["open", path])`).
 2. Futures are only written if OHLC returned new rows; docstring/README claim "weekends/holidays" works — it doesn't (early return on empty data).
-3. README says weekly change = "~7 calendar days back" and Tuesday fill "A–H"; code does **5 trading rows back** and fills **A–P**. Treat the code as truth.
+3. README says weekly change = "~7 calendar days back" and Tuesday fill "A–H"; code does **5 trading rows back** and fills **A–P** (now A–W). Treat the code as truth.
 4. `get_last_date` uses `ws.max_row` → a stray comment/format in a lower row can break the last date. Better: scan col B upward for the last real date.
 5. Groww scraping depends on a private `__NEXT_DATA__` structure — most fragile part; keep a clean fallback (skip futures + log) and isolate it behind `fetch_futures()`.
 6. `K` writes "LH" and `L` writes "Higher Low" as the else-branches — labels are asymmetric (kept for fidelity with v2.1 workflows).
-7. Tuesday highlight uses openpyxl theme color 9 — renders differently across themes; use a fixed RGB instead.
+7. Tuesday highlight uses openpyxl theme color 9 — renders differently across themes; use a fixed RGB instead. (Done: `DDEBF7`.)
 8. Unused imports / dead `get_base_dir` import; `yfinance` `end=tomorrow` returns today's partial bar if run during market hours — decide whether to drop incomplete day.
 9. Config `start_date` default is computed once; fine.

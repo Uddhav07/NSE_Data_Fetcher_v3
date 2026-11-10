@@ -151,7 +151,7 @@ To stop it: `schtasks /Delete /TN "NSE Data Fetcher" /F`. Set `"open_excel_after
 | C–F | Open, High, Low, Close |
 | G–H | Daily change; Weekly change (vs 5 trading days back, holiday-aware) |
 | I–L | Close above prev High / below prev Low, HH-HL, LL-LH (formulas) |
-| M | Diff in Future (`=T − Close`) |
+| M | Diff in Future (`=U − Close`) |
 | N | **Date Total** — `day, digit-root of full date`; 2026-11-09 → `9, 3` |
 | O–S | **RSI(14)** on 5/15/30/45/60-min candles, as of the 15:30 IST close |
 | T | **Moon Nakshatra** at 09:15 IST (sidereal, Lahiri), left-aligned |
@@ -164,7 +164,7 @@ Use **filters only — don't sort** the table: Daily/Weekly change and the High/
 **Updating from an older version?** Your existing workbook is migrated automatically on the next run (a backup goes to `archive/` first): columns shift into the new order (Future, Expiry and Comments stay at the end), and your notes, values and formatting travel with them.
 
 Cell-only colours: RSI below 30 red, RSI 70–79.99 light green, RSI 80+ dark green, Date Total `3, 6` / `6, 3` purple.
-Daily/weekly/futures change columns go green/red. Tuesday rows get a light-blue row fill when created.
+Daily/weekly/futures change columns go green/red. Tuesday rows get a light-blue fill across the whole row (A–W) when created — the only whole-row colour; the cell colours above still show.
 
 Notes on the intraday data: Yahoo keeps only ~60 days of 5/15/30-min history (so older rows have no
 5/15/30/45m RSI) but about 2 years of 60-min history, so **RSI 60m fills back much further**. 45-min candles are built from 15-min ones. Today's RSI is filled only on a run after 15:35 IST.
